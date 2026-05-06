@@ -46,6 +46,8 @@ export type KolWalletInclude = "pnl_by_token" | "recent_winners" | "recent_loser
 export interface KolFeedParams {
   /** Number of trades to return (1–100). Default: 50. */
   limit?: number;
+  /** Cursor — return trades strictly older than this ISO 8601 timestamp. Pass `next_before` from the previous response. */
+  before?: string;
   /** Filter by trade direction. */
   action?: KolAction;
   /** Filter by a specific KOL wallet address. */
@@ -114,8 +116,14 @@ export interface KolTrade {
   token_mint: string;
   token_name?: string | null;
   token_symbol?: string | null;
+  token_image_url?: string | null;
   sol_amount: number;
   token_amount: number;
+  /** Token market cap in USD at the moment of trade (real-time, sourced from
+   *  our in-memory price tracker — not the Dexscreener spot which lags). */
+  market_cap_usd_at_trade?: number | null;
+  /** Token price in USD at the moment of trade. */
+  price_usd_at_trade?: number | null;
   traded_at: string;
   kol_strategy_tag?: string | null;
   kol_auto_strategy_tag?: string | null;
@@ -134,6 +142,8 @@ export interface KolFeedResponse {
   trades: KolTrade[];
   count: number;
   data_age_seconds?: number | null;
+  /** Cursor for the next page — pass as `before` to fetch older trades. */
+  next_before?: string | null;
   _rid?: string;
 }
 
@@ -157,6 +167,10 @@ export interface KolLeaderboardEntry {
   percentile_winrate_7d?: number | null;
   percentile_pnl_30d?: number | null;
   percentile_winrate_30d?: number | null;
+  /** v2.4 (2026-05-06) — average market cap (USD) at the moment of each buy in the period. Null when no buys had a tracked MC stamp. */
+  avg_entry_mc_usd?: number | null;
+  /** v2.4 — buys whose market_cap_usd_at_trade was non-null and counted toward avg_entry_mc_usd. Use to gauge confidence. */
+  entry_mc_samples?: number;
 }
 
 export interface KolLeaderboardResponse {
@@ -221,6 +235,12 @@ export interface CoordinatedToken {
   holders_count?: number;
   /** v1.1 — Composite 0–100 coordination score. */
   coordination_score?: number;
+  /** v2.4 (2026-05-06) — market cap (USD) stamped on the cluster's chronologically-first KOL buy. */
+  market_cap_usd_at_first_buy?: number | null;
+  /** v2.4 — current market cap (USD), from token_prices. */
+  market_cap_usd?: number | null;
+  /** v2.4 — current last-trade price (USD). */
+  last_price_usd?: number | null;
   kols?: CoordinationKol[];
 }
 
@@ -309,6 +329,137 @@ export interface CoordinationAlertUpdateResponse {
 
 export interface CoordinationAlertDeleteResponse {
   deleted: boolean;
+}
+
+// ─── First-touch signal ─────────────────────────────────────────────────────
+
+export type ScoutTier = "S" | "A" | "B" | "C";
+
+export interface FirstTouchesParams {
+  /** ISO datetime — return events strictly newer than this. Polling cursor. */
+  since?: string;
+  /** ISO datetime — return events strictly older than this. Pagination cursor. */
+  before?: string;
+  /** 1–100. Default: 50 (BASIC capped at 20). */
+  limit?: number;
+  /** Single KOL wallet (32–44 base58 chars). */
+  kol?: string;
+  /** 0–100. */
+  min_kol_winrate_7d?: number;
+  /** Restrict to scouts of this tier or better (S > A > B > C). Requires n_first_touches_30d ≥ 30. */
+  min_scout_tier?: ScoutTier;
+  /** Lower the minimum sample size for scout scoring (default 30). */
+  min_n_touches?: number;
+  strategy?: "scalper" | "day_trader" | "swing_trader" | "hodler" | "mixed";
+  token_age_max_min?: number;
+  min_first_buy_sol?: number;
+  /** Suffix-filter the token mint (e.g. "pump", "bonk"). */
+  mint_suffix?: string;
+  /** Shortcut filter sets — `scout` = min_scout_tier=B + min_n_touches=30 + token_age_max_min=60. */
+  preset?: "scout" | "fresh_launch";
+  /** Comma-separated includes — currently `followers_4h` (only computed for events ≥4h old). */
+  include?: string;
+}
+
+export interface FirstTouchEvent {
+  token_mint: string;
+  token_symbol: string | null;
+  token_name: string | null;
+  token_image_url: string | null;
+  first_buy_at: string;
+  sol_amount: number | null;
+  token_amount: number | null;
+  tx_signature: string | null;
+  token_age_minutes: number | null;
+  first_kol: {
+    /** Wallet address — only present on Ultra tier. */
+    wallet?: string;
+    name: string | null;
+    twitter_url: string | null;
+    winrate_7d: number | null;
+    strategy: string | null;
+    scout_tier: ScoutTier | null;
+    /** Same as swarm_3plus_pct on the leaderboard. */
+    scout_score: number | null;
+    n_first_touches_30d: number | null;
+  };
+  followers_4h?: number;
+  /** v2.4 (2026-05-06) — market cap (USD) stamped on the exact tx that fired the first KOL buy, joined via tx_signature. */
+  market_cap_usd_at_first_buy?: number | null;
+  /** v2.4 — token price (USD) at the same moment. */
+  price_usd_at_first_buy?: number | null;
+  /** v2.4 — current market cap (USD), from token_prices. */
+  market_cap_usd?: number | null;
+  /** v2.4 — current last-trade price (USD). */
+  last_price_usd?: number | null;
+}
+
+export interface FirstTouchesResponse {
+  events: FirstTouchEvent[];
+  count: number;
+  next_before: string | null;
+  data_age_seconds: number | null;
+  _rid?: string;
+}
+
+export interface FirstTouchSubscriptionFilters {
+  kol?: string;
+  mint_suffix?: string;
+  min_first_buy_sol?: number;
+  min_scout_tier?: ScoutTier;
+  min_n_touches?: number;
+}
+
+export interface FirstTouchSubscription {
+  id: string;
+  name: string | null;
+  filters: FirstTouchSubscriptionFilters;
+  delivery_mode: CoordinationDeliveryMode;
+  webhook_url: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface FirstTouchSubscriptionCreateParams {
+  name?: string;
+  filters?: FirstTouchSubscriptionFilters;
+  /** Default: "webhook". */
+  delivery_mode?: CoordinationDeliveryMode;
+  /** Required when delivery_mode is "webhook" or "both". Must be HTTPS. */
+  webhook_url?: string;
+}
+
+export interface FirstTouchSubscriptionUpdateParams {
+  name?: string | null;
+  filters?: FirstTouchSubscriptionFilters;
+  delivery_mode?: CoordinationDeliveryMode;
+  webhook_url?: string | null;
+  is_active?: boolean;
+}
+
+export interface FirstTouchSubscriptionListResponse {
+  subscriptions: FirstTouchSubscription[];
+  _rid?: string;
+}
+
+export interface FirstTouchSubscriptionCreateResponse {
+  subscription: FirstTouchSubscription;
+  /** One-time HMAC secret. Save it — will not be shown again. */
+  webhook_secret: string | null;
+  note?: string;
+}
+
+export interface FirstTouchSubscriptionGetResponse {
+  subscription: FirstTouchSubscription;
+}
+
+export interface FirstTouchSubscriptionUpdateResponse {
+  subscription: FirstTouchSubscription;
+}
+
+export interface FirstTouchSubscriptionDeleteResponse {
+  ok: boolean;
 }
 
 export type KolPairsPeriod = "7d" | "30d";
@@ -688,6 +839,8 @@ export interface DeployerTokensParams extends PaginationParams {
 export interface DeployerAlertsParams extends PaginationParams {
   /** ISO 8601 datetime — return alerts since this time. */
   since?: string;
+  /** Cursor — return alerts strictly older than this ISO 8601 timestamp. Pass `next_before` from the previous response. Preferred over `offset` at scale. */
+  before?: string;
   /** Max results (1–50). Default: 20. */
   limit?: number;
   /**
@@ -695,6 +848,12 @@ export interface DeployerAlertsParams extends PaginationParams {
    * **PRO/ULTRA only** — BASIC subscribers passing this receive HTTP 403.
    */
   tier?: DeployerTier;
+  /** Filter by alert_type (e.g. "new_deploy", "bonded"). */
+  alert_type?: string;
+  /** Filter by alert priority. */
+  priority?: "high" | "medium" | "low";
+  /** Only alerts where at least N KOLs bought the token (post-filter against the enriched kol_buys.count). */
+  min_kol_buys?: number;
 }
 
 export interface DeployerAlertStatsParams {
@@ -712,6 +871,12 @@ export interface BestTokensParams {
 export interface RecentBondsParams {
   /** Max results (1–50). Default: 20. */
   limit?: number;
+  /** ISO 8601 datetime — only bonds strictly newer than this timestamp. Pass `next_since` from the previous response for incremental polling. */
+  since?: string;
+  /** Filter by deployer tier. */
+  tier?: DeployerTier;
+  /** Only bonds that reached at least this peak market cap (USD). */
+  peak_mc_min?: number;
 }
 
 export interface DeployerTierCounts {
@@ -737,6 +902,8 @@ export interface DeployerSummary {
   recent_outcomes?: string | null;
   recent_bond_rate?: number | null;
   total_tokens_deployed?: number | null;
+  /** Peak market cap (USD) of this deployer's best token to date. Populated on alert rows. */
+  best_token_peak_mc?: number | null;
 }
 
 export interface DeployerLeaderboardEntry {
@@ -820,6 +987,8 @@ export interface DeployerAlertsResponse {
   alerts: DeployerAlert[];
   limit: number;
   offset: number;
+  /** Cursor for the next page — pass as `before` to fetch older alerts. */
+  next_before?: string | null;
   data_age_seconds?: number | null;
   _rid?: string;
 }
@@ -884,6 +1053,7 @@ export interface RecentBond {
   token_mint: string;
   token_name?: string | null;
   token_symbol?: string | null;
+  token_image_url?: string | null;
   deployed_at: string;
   bonded_at: string;
   time_to_bond_minutes?: number | null;
@@ -895,6 +1065,8 @@ export interface RecentBond {
 export interface RecentBondsResponse {
   tokens: RecentBond[];
   limit: number;
+  /** Cursor for incremental polling — pass as `since` on the next call to fetch only newer bonds. */
+  next_since?: string | null;
   _rid?: string;
 }
 
@@ -978,6 +1150,9 @@ export interface AlphaWalletEntry {
   buy_size_stddev?: number;
   active_hours?: number | null;
   bot_confidence?: string | null;
+  /** v2.4 (2026-05-06) — avg market cap (USD) at the moment of each buy in the period. Null + 0 samples for non-KOL wallets. */
+  avg_entry_mc_usd?: number | null;
+  entry_mc_samples?: number;
 }
 
 export interface AlphaLeaderboardResponse {
@@ -1092,6 +1267,73 @@ export interface AlphaBuyerQualityResponse {
   /** PRO/ULTRA only */
   breakdown?: AlphaBuyerQualityBreakdown;
   note?: string;
+}
+
+export interface AlphaBuyerQualityBatchResponse {
+  tokens: AlphaBuyerQualityResponse[];
+  count: number;
+  /** Number of mints that were served from the shared LRU cache without a DB query. */
+  cache_hits: number;
+  _rid?: string;
+}
+
+// ─── Token intelligence types (/token/{mint}) ─────────────────────────────────
+
+export type TokenKolSignal = "accumulating" | "distributing" | "neutral";
+
+export interface TokenKolTopBuyer {
+  name: string;
+  sol_amount: number;
+  /** ULTRA only — individual KOL wallet addresses in the top-buyer list. */
+  wallet?: string;
+}
+
+export interface TokenKolActivity {
+  buying_kols: number;
+  selling_kols: number;
+  net_flow_sol: number;
+  signal: TokenKolSignal;
+  top_buyers: TokenKolTopBuyer[];
+}
+
+export interface TokenDeployerInfo {
+  wallet: string;
+  tier: DeployerTier;
+  bonding_rate: number | null;
+  total_deployed: number | null;
+  total_bonded: number | null;
+  recent_bond_rate: number | null;
+}
+
+export interface TokenResponseBody {
+  mint: string;
+  price_usd: number | null;
+  price_sol: number | null;
+  market_cap: number | null;
+  volume_24h_usd: number | null;
+  volume_24h_sol: number | null;
+  trades_24h: number | null;
+  last_trade_at: string | null;
+  /** When the mint first appeared in our indexer (null if unknown). */
+  first_seen_at?: string | null;
+  /** Seconds since first_seen_at (null if unknown). */
+  age_seconds?: number | null;
+  is_blacklisted?: boolean;
+  /** "stablecoin" | "wrapped_sol" | "lst" | "rug" | custom category when blacklisted. Null otherwise. */
+  blacklist_category?: string | null;
+  deployer: TokenDeployerInfo | null;
+  kol_activity: TokenKolActivity;
+}
+
+export interface TokenResponse {
+  token: TokenResponseBody;
+  _rid?: string;
+}
+
+export interface TokenBatchResponse {
+  tokens: TokenResponseBody[];
+  count: number;
+  _rid?: string;
 }
 
 // ─── Wallet Tracker types ─────────────────────────────────────────────────────
@@ -1423,6 +1665,21 @@ class KolClient {
     if (types && types.length > 0) flat.types = types.join(",");
     return this._fetch(buildUrl(this._baseUrl, "/kol/alerts/recent", flat));
   }
+
+  /**
+   * Recent first-KOL-touch events on tokens — the moment a tracked KOL was the
+   * first to buy a given mint. Filterable by scout tier (S/A/B/C from
+   * mv_kol_scout_score), KOL winrate, token age, mint suffix, etc.
+   *
+   * Backtest: top scouts attract ≥3 follow-on KOLs within 4h ~50% of the time vs ~14% baseline.
+   * Median lead time before second KOL is 12s — for trading this signal,
+   * subscribe via the `kol:first_touches` WebSocket channel rather than polling.
+   *
+   * @param params Optional filters; see FirstTouchesParams.
+   */
+  firstTouches(params?: FirstTouchesParams): Promise<FirstTouchesResponse> {
+    return this._fetch(buildUrl(this._baseUrl, "/kol/first-touches", params as Record<string, string | number | undefined>));
+  }
 }
 
 // ─── Alpha namespace ─────────────────────────────────────────────────────────
@@ -1478,6 +1735,47 @@ class AlphaClient {
    */
   buyerQuality(mint: string): Promise<AlphaBuyerQualityResponse> {
     return this._fetch(buildUrl(this._baseUrl, `/tokens/${encodeURIComponent(mint)}/buyer-quality`));
+  }
+}
+
+// ─── Token namespace (/token/{mint}) ─────────────────────────────────────────
+
+class TokenClient {
+  constructor(
+    private readonly _fetch: <T>(url: string) => Promise<T>,
+    private readonly _post: <T>(url: string, body?: unknown) => Promise<T>,
+    private readonly _baseUrl: string,
+  ) {}
+
+  /**
+   * Comprehensive per-mint snapshot: price (VWAP), market cap, 24h volume,
+   * deployer reputation, KOL smart-money activity, first_seen_at / age_seconds,
+   * and blacklist status — all in one call.
+   * **ULTRA** adds individual KOL wallet addresses in kol_activity.top_buyers[].
+   * @param mint Token mint address (base58).
+   */
+  get(mint: string): Promise<TokenResponse> {
+    return this._fetch(buildUrl(this._baseUrl, `/token/${encodeURIComponent(mint)}`));
+  }
+
+  /**
+   * Batch lookup of up to 50 mints. Returns the same per-mint shape as `get()`
+   * in a single round-trip — DB queries batched with `IN(...)`, dex-stream +
+   * RPC fan-outs run in parallel. ~10-20x cheaper than N sequential calls.
+   * @param mints Array of 1–50 Solana token mints.
+   */
+  batch(mints: string[]): Promise<TokenBatchResponse> {
+    return this._post(`${this._baseUrl}/token/batch`, { mints });
+  }
+
+  /**
+   * Batch buyer-quality scoring for up to 50 mints. Shares the same 5-minute
+   * LRU cache as `alpha.buyerQuality(mint)` — already-warm mints return at
+   * near-zero cost. Response includes a `cache_hits` counter.
+   * @param mints Array of 1–50 Solana token mints.
+   */
+  batchBuyerQuality(mints: string[]): Promise<AlphaBuyerQualityBatchResponse> {
+    return this._post(`${this._baseUrl}/tokens/batch/buyer-quality`, { mints });
   }
 }
 
@@ -1673,6 +1971,50 @@ class CoordinationAlertsClient {
   }
 }
 
+// ─── First-touch webhook subscriptions (ULTRA) ──────────────────────────────
+
+class FirstTouchSubscriptionsClient {
+  constructor(
+    private readonly _get: <T>(url: string) => Promise<T>,
+    private readonly _post: <T>(url: string, body?: unknown) => Promise<T>,
+    private readonly _patch: <T>(url: string, body?: unknown) => Promise<T>,
+    private readonly _delete: <T>(url: string) => Promise<T>,
+    private readonly _baseUrl: string,
+  ) {}
+
+  /**
+   * List your first-touch webhook subscriptions.
+   * Requires ULTRA. Up to 10 subscriptions per ULTRA user.
+   */
+  list(): Promise<FirstTouchSubscriptionListResponse> {
+    return this._get(buildUrl(this._baseUrl, "/kol/first-touches/subscriptions"));
+  }
+
+  /**
+   * Create a first-touch webhook subscription. Returns the subscription plus a
+   * one-time `webhook_secret` (save it — used for HMAC-SHA256 signature verification).
+   * Requires ULTRA.
+   */
+  create(params: FirstTouchSubscriptionCreateParams): Promise<FirstTouchSubscriptionCreateResponse> {
+    return this._post(buildUrl(this._baseUrl, "/kol/first-touches/subscriptions"), params);
+  }
+
+  /** Fetch a single subscription by id. */
+  get(id: string): Promise<FirstTouchSubscriptionGetResponse> {
+    return this._get(buildUrl(this._baseUrl, `/kol/first-touches/subscriptions/${encodeURIComponent(id)}`));
+  }
+
+  /** Update a subscription (toggle is_active, change filters, etc). */
+  update(id: string, params: FirstTouchSubscriptionUpdateParams): Promise<FirstTouchSubscriptionUpdateResponse> {
+    return this._patch(buildUrl(this._baseUrl, `/kol/first-touches/subscriptions/${encodeURIComponent(id)}`), params);
+  }
+
+  /** Delete a subscription. */
+  delete(id: string): Promise<FirstTouchSubscriptionDeleteResponse> {
+    return this._delete(buildUrl(this._baseUrl, `/kol/first-touches/subscriptions/${encodeURIComponent(id)}`));
+  }
+}
+
 // ─── Tools namespace ─────────────────────────────────────────────────────────
 
 class ToolsClient {
@@ -1765,6 +2107,8 @@ export class MadeOnSol {
   readonly deployer: DeployerClient;
   /** Alpha wallet intelligence: leaderboard, profiles, cap tables, buyer quality. */
   readonly alpha: AlphaClient;
+  /** Token intelligence — comprehensive per-mint snapshot + batch lookups. */
+  readonly token: TokenClient;
   /** Solana tool directory endpoints. */
   readonly tools: ToolsClient;
   /** WebSocket streaming token (Pro/Ultra). */
@@ -1775,6 +2119,8 @@ export class MadeOnSol {
   readonly walletTracker: WalletTrackerClient;
   /** Coordination alert rules CRUD (v1.1) — PRO/ULTRA. */
   readonly coordinationAlerts: CoordinationAlertsClient;
+  /** First-touch webhook subscriptions CRUD — ULTRA only. Use `kol.firstTouches()` for read-only queries. */
+  readonly firstTouchSubscriptions: FirstTouchSubscriptionsClient;
 
   private readonly _apiKey: string;
   private readonly _baseUrl: string;
@@ -1803,11 +2149,13 @@ export class MadeOnSol {
     this.kol = new KolClient(boundGet, this._baseUrl);
     this.deployer = new DeployerClient(boundGet, this._baseUrl);
     this.alpha = new AlphaClient(boundGet, this._baseUrl);
+    this.token = new TokenClient(boundGet, boundPost, this._baseUrl);
     this.tools = new ToolsClient(boundGet, this._baseUrl);
     this.stream = new StreamClient(boundPost, this._baseUrl);
     this.webhooks = new WebhookClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
     this.walletTracker = new WalletTrackerClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
     this.coordinationAlerts = new CoordinationAlertsClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
+    this.firstTouchSubscriptions = new FirstTouchSubscriptionsClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
   }
 
   private _headers(): Record<string, string> {

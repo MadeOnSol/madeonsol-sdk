@@ -9,6 +9,8 @@
 Official TypeScript/JavaScript SDK for the **[MadeOnSol](https://madeonsol.com) Solana API** — zero dependencies, fully typed, works in Node.js ≥ 18 and edge runtimes.
 > Real-time Solana trading intelligence: track 1,000+ KOL wallets with <3s latency, score 6,700+ Pump.fun deployers by reputation, detect multi-KOL coordination signals, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day at [madeonsol.com/developer](https://madeonsol.com/developer) — no credit card required.
 
+> **New in 2.4.0** *(2026-05-06)* — Market cap fields flow through every signal endpoint. `KolLeaderboardEntry` and `AlphaWalletEntry` gain `avg_entry_mc_usd` + `entry_mc_samples` (micro-cap vs mid-cap trader profile). `CoordinatedToken` gains `market_cap_usd_at_first_buy` + current `market_cap_usd` + `last_price_usd`. `FirstTouchEvent` gains `market_cap_usd_at_first_buy` + `price_usd_at_first_buy` + current MC. All additive — no breaking changes.
+
 > **Build Solana trading bots, analytics dashboards, KOL copy-trading tools, deployer sniper bots, and ecosystem browsers.**
 
 ## Quick start (10 seconds)
@@ -84,6 +86,7 @@ const { tools } = await client.tools.search({ q: "trading", limit: 10 });
 - **DEX trade sniping** — subscribe to the all-DEX stream filtered by token or wallet
 - **Deployer sniper** — monitor `client.deployer.alerts()` for elite-tier launches
 - **Coordination detector** — flag tokens with `client.kol.coordination({ min_kols: 3 })`
+- **Scout signal** — track first-KOL-touch events filtered to S/A-tier scouts via `client.kol.firstTouches({ preset: "scout" })`
 - **Analytics dashboard** — combine leaderboard, PnL, and tool data
 - **Telegram/Discord bot** — pipe alerts via webhooks into chat
 - **Portfolio tracker** — use `client.kol.wallet()` to follow specific KOL positions
@@ -107,6 +110,8 @@ const { trades, count } = await client.kol.feed({
 ```
 
 Returns: `KolFeedResponse` — `{ trades: KolTrade[], count: number }`
+
+Each `KolTrade` includes `market_cap_usd_at_trade` and `price_usd_at_trade` — the token's MC and price at the exact moment the swap fired, sourced from our in-memory price tracker (real-time, faster than Dexscreener spot). Use these to surface "KOL bought $X SOL of token at $Y MC" without a second lookup.
 
 ---
 
@@ -192,6 +197,55 @@ await client.coordinationAlerts.delete(rule.id);
 Webhook signatures: header `X-MadeOnSol-Signature` = `sha256(timestamp + "." + body)` with `webhook_secret` as the HMAC key. Reject deliveries older than ~5 min.
 
 WebSocket delivery: subscribe to channel `kol:coordination` on `wss://madeonsol.com/ws/v1/stream` — events are user-scoped (you only receive your own rule fires).
+
+---
+
+#### `client.kol.firstTouches(params?)` *(new in 2.2)*
+
+Recent first-KOL-touch events on tokens — every time a tracked KOL was the first to buy a given mint. Filterable by **scout tier** (S/A/B/C from the per-KOL `mv_kol_scout_score` view), KOL winrate, token age, mint suffix, etc.
+
+**Backtested signal:** top scouts attract ≥3 follow-on KOLs within 4h ~50% of the time vs ~14% baseline (38d / 491k buys / 72,549 events). The full leaderboard is at [madeonsol.com/kol/scouts](https://madeonsol.com/kol/scouts).
+
+```ts
+// S-tier scouts on tokens younger than 1h
+const { events } = await client.kol.firstTouches({
+  preset: "scout",
+  min_scout_tier: "S",
+  limit: 20,
+});
+
+for (const e of events) {
+  console.log(e.first_kol.name, "scouted", e.token_symbol, `(scout_score=${e.first_kol.scout_score}%)`);
+}
+```
+
+Filter knobs: `since`, `before`, `limit`, `kol`, `min_kol_winrate_7d`, `min_scout_tier`, `min_n_touches`, `strategy`, `token_age_max_min`, `min_first_buy_sol`, `mint_suffix`, `preset` (`"scout"` or `"fresh_launch"`), `include` (e.g. `"followers_4h"`).
+
+> **Don't poll — push.** Median lead time before the second KOL is **12 seconds**, so REST polling will lose the swarm. Subscribe to the `kol:first_touches` WebSocket channel (PRO+) or, on Ultra, create an HMAC-signed webhook subscription via `client.firstTouchSubscriptions.create({...})`.
+
+Returns: `FirstTouchesResponse`
+
+---
+
+#### `client.firstTouchSubscriptions.*` *(Ultra)*
+
+Create push-delivery rules for first-touch events. Up to 10 active subscriptions per Ultra user.
+
+```ts
+const { subscription, webhook_secret } = await client.firstTouchSubscriptions.create({
+  name: "S-tier scouts on pump tokens",
+  filters: { min_scout_tier: "S", mint_suffix: "pump" },
+  delivery_mode: "webhook",
+  webhook_url: "https://my.bot/hooks/scout",
+});
+// store webhook_secret — shown once
+
+await client.firstTouchSubscriptions.list();
+await client.firstTouchSubscriptions.update(subscription.id, { is_active: false });
+await client.firstTouchSubscriptions.delete(subscription.id);
+```
+
+Same HMAC scheme as coordination alerts. WebSocket channel: `kol:first_touches`.
 
 ---
 
