@@ -17,7 +17,8 @@
   ],
   "scripts": {
     "build": "tsc",
-    "prepublishOnly": "npm run build"
+    "preflight": "bash ./scripts/preflight-publish.sh",
+    "prepublishOnly": "npm run preflight && npm run build"
   },
   "keywords": [
     "solana",
