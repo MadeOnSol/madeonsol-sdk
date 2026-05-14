@@ -21,7 +21,7 @@ npm install madeonsol
 
 ## Authentication
 
-Get a free API key at: https://madeonsol.com/developer
+Get a free API key at: https://madeonsol.com/pricing
 
 ```typescript
 import { MadeOnSol } from "madeonsol";
@@ -88,7 +88,7 @@ All methods throw `MadeOnSolError` with `.message`, `.status`, and `.body` prope
 
 ## Links
 
-- Documentation: https://madeonsol.com/solana-api
+- Documentation: https://madeonsol.com/api-docs
 - Website: https://madeonsol.com
 - GitHub: https://github.com/LamboPoewert/madeonsol-sdk
 - npm: https://www.npmjs.com/package/madeonsol

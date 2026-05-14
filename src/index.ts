@@ -1686,7 +1686,7 @@ export interface WebhookDeleteResponse {
 export interface MadeOnSolConfig {
   /**
    * MadeOnSol API key (starts with `msk_`).
-   * Get a free key at https://madeonsol.com/developer
+   * Get a free key at https://madeonsol.com/pricing
    */
   apiKey: string;
 }
@@ -2272,7 +2272,7 @@ class WebhookClient {
  * MadeOnSol API client.
  *
  * Supports two authentication methods:
- * - **MadeOnSol API key** — starts with `msk_`, get one free at https://madeonsol.com/developer
+ * - **MadeOnSol API key** — starts with `msk_`, get one free at https://madeonsol.com/pricing
  *
  * @example
  * ```ts
@@ -2316,11 +2316,11 @@ export class MadeOnSol {
       // and the user never sees the link. console.error guarantees stderr.
       console.error(
         "\n[madeonsol] Missing API key.\n" +
-        "  → Get a free key (200 req/day, no card) at https://madeonsol.com/developer\n" +
+        "  → Get a free key (200 req/day, no card) at https://madeonsol.com/pricing\n" +
         "  → Then: new MadeOnSol({ apiKey: process.env.MADEONSOL_API_KEY })\n",
       );
       throw new Error(
-        "MadeOnSol: apiKey is required. Get a free key at https://madeonsol.com/developer",
+        "MadeOnSol: apiKey is required. Get a free key at https://madeonsol.com/pricing",
       );
     }
     this._apiKey = config.apiKey;

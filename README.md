@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
 Official TypeScript/JavaScript SDK for the **[MadeOnSol](https://madeonsol.com) Solana API** — zero dependencies, fully typed, works in Node.js ≥ 18 and edge runtimes.
-> Real-time Solana trading intelligence: track 1,000+ KOL wallets with <3s latency, score 6,700+ Pump.fun deployers by reputation, detect multi-KOL coordination signals, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day at [madeonsol.com/developer](https://madeonsol.com/developer) — no credit card required.
+> Real-time Solana trading intelligence: track 1,000+ KOL wallets with <3s latency, score 6,700+ Pump.fun deployers by reputation, detect multi-KOL coordination signals, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day at [madeonsol.com/pricing](https://madeonsol.com/pricing) — no credit card required.
 
 > **New in 2.6.1** *(2026-05-13)* — **Velocity types fixed.** Velocity fields are now correctly typed as `mc_change_pct`, `volume_usd`, `mev_volume_pct` — each its own object keyed by `5m`/`15m`/`1h`/`2h`/`4h` — to match the actual API response. The 2.6.0 shape (`velocity[window].mc_change_pct`) was wrong; clients reading it would get `undefined`. Patch is type-only — no runtime breaking changes.
 >
@@ -23,7 +23,7 @@ npm install madeonsol
 
 ```ts
 import { MadeOnSol } from "madeonsol";
-const client = new MadeOnSol({ apiKey: "msk_..." }); // free key: https://madeonsol.com/developer
+const client = new MadeOnSol({ apiKey: "msk_..." }); // free tier at madeonsol.com/pricing
 const { trades } = await client.kol.feed({ limit: 5, action: "buy" });
 ```
 
@@ -41,7 +41,7 @@ const { trades } = await client.kol.feed({ limit: 5, action: "buy" });
 
 ## Authentication
 
-Get a free API key at [madeonsol.com/developer](https://madeonsol.com/developer). Keys start with `msk_`.
+Get a free API key at [madeonsol.com/pricing](https://madeonsol.com/pricing). Keys start with `msk_`.
 
 ---
 
@@ -628,7 +628,7 @@ Returns: `AlphaBuyerQualityBatchResponse`
 
 ### Account — `client.me()` *(new in 2.6)*
 
-Inspect your tier, quota state, and feature usage in one call. Reads from the same in-memory counters that drive rate-limit enforcement, so `quota.daily.remaining` is authoritative — no header parsing needed. Works on every tier (BASIC/TRADER/PRO/ULTRA).
+Inspect your tier, quota state, and feature usage in one call. Reads from the same in-memory counters that drive rate-limit enforcement, so `quota.daily.remaining` is authoritative — no header parsing needed. Works on every tier (BASIC/PRO/ULTRA).
 
 ```ts
 const me = await client.me();
@@ -913,7 +913,7 @@ import type {
 ## Related
 
 - [MadeOnSol website](https://madeonsol.com) — Browse 950+ Solana tools
-- [API documentation](https://madeonsol.com/solana-api) — Interactive endpoint reference
+- [API documentation](https://madeonsol.com/api-docs) — Interactive endpoint reference
 - [MadeOnSol on GitHub](https://github.com/LamboPoewert/madeonsol) — Main project repository
 
 ## Also Available
