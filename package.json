@@ -1,6 +1,6 @@
 {
   "name": "madeonsol",
-  "version": "2.6.2",
+  "version": "2.6.3",
   "description": "Official SDK for the MadeOnSol Solana API — KOL wallet tracking, Pump.fun deployer intelligence, and tool directory",
   "type": "module",
   "main": "dist/index.js",
@@ -29,6 +29,7 @@
     "trading",
     "pump.fun",
     "pumpfun",
+    "pumpfun-sniper",
     "deployer",
     "deployer-hunter",
     "wallet-tracking",
@@ -39,7 +40,16 @@
     "token",
     "madeonsol",
     "bonding-curve",
-    "smart-money"
+    "smart-money",
+    "memecoin",
+    "memecoin-tracker",
+    "alpha",
+    "alpha-bot",
+    "copy-trading",
+    "copy-trade",
+    "solana-trading-bot",
+    "trade-stream",
+    "dex"
   ],
   "license": "MIT",
   "repository": {
