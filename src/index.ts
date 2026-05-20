@@ -1306,6 +1306,185 @@ export interface AlphaBuyerQualityBatchResponse {
   _rid?: string;
 }
 
+// ─── Universal wallet types (/wallet/{address}/*) ─────────────────────────────
+// New 2026-05-20. Works on any Solana wallet, not just curated KOLs. Backed by
+// FIFO cost-basis math over the last 90 days of token_trades. Cached in
+// wallet_analyses with dynamic TTL (5min/1h/24h). Cache hits don't count
+// against your daily quota.
+
+export interface WalletStats {
+  first_seen: string;
+  last_seen:  string;
+  total_trades: number;
+  buys:  number;
+  sells: number;
+  bought_sol: number;
+  sold_sol:   number;
+  unique_tokens: number;
+  /** Lookback window in days — currently 90. */
+  window_days: number;
+}
+
+export interface WalletFlags {
+  is_kol:   boolean;
+  kol_name: string | null;
+  /** True if the wallet exists in mv_alpha_wallets (≥1 early-buyer record). */
+  is_alpha_tracked: boolean;
+  /** 0–1, higher = more bot-like. From the alpha classifier (migration 124). */
+  bot_confidence:      number | null;
+  alpha_win_rate:      number | null;
+  alpha_net_pnl_sol:   number | null;
+  alpha_tokens_traded: number | null;
+  is_deployer: boolean;
+  deployer_tokens_deployed: number | null;
+  deployer_bonding_rate:    number | null;
+}
+
+export interface WalletStatsResponse {
+  address: string;
+  /** Null if the wallet has no trades in the window but does appear in flag tables. */
+  stats: WalletStats | null;
+  flags: WalletFlags;
+  _rid?: string;
+}
+
+export interface WalletPnlSummary {
+  realized_sol:   number;
+  unrealized_sol: number;
+  total_pnl_sol:  number;
+  total_bought_sol: number;
+  total_sold_sol:   number;
+  /** Closed-position win count (not per-trade). */
+  wins:   number;
+  /** Closed-position loss count. */
+  losses: number;
+  win_rate: number | null;
+  /** Gross wins / gross losses. null when there are no losses (undefined math). */
+  profit_factor:       number | null;
+  avg_hold_minutes:    number | null;
+  median_hold_minutes: number | null;
+  /** Running peak-to-trough drawdown on the realized SOL curve. */
+  max_drawdown_sol: number;
+  open_positions_count:   number;
+  closed_positions_count: number;
+  total_tokens_traded:    number;
+  best_realized:  { token_mint: string; realized_sol: number } | null;
+  worst_realized: { token_mint: string; realized_sol: number } | null;
+}
+
+export interface WalletPnlCurvePoint {
+  /** YYYY-MM-DD (UTC). */
+  date: string;
+  day_pnl: number;
+  cumulative_pnl: number;
+  trades: number;
+}
+
+export interface WalletClosedPosition {
+  token_mint: string;
+  buy_count:  number;
+  sell_count: number;
+  bought_sol: number;
+  sold_sol:   number;
+  pnl_sol:    number;
+  /** realized_sol / total_bought_sol × 100. */
+  roi_pct:    number | null;
+  /** First buy → last sell, in minutes. */
+  hold_minutes: number | null;
+  result: "win" | "loss" | "breakeven";
+  first_trade: string | null;
+  last_trade:  string | null;
+}
+
+export interface WalletOpenPosition {
+  token_mint: string;
+  token_amount:   number;
+  cost_basis_sol: number;
+  avg_entry_price_sol: number;
+  /** Live from mc-tracker. null if the mint has no current price (delisted / never indexed). */
+  current_price_sol: number | null;
+  current_value_sol: number | null;
+  unrealized_sol:    number | null;
+  unrealized_pct:    number | null;
+  first_buy_at: string | null;
+  buys_in_position: number;
+}
+
+export interface WalletPnlNotes {
+  /** Cost basis is observable only from this timestamp onwards (data window cutoff). */
+  cost_basis_observable_from: string;
+  /** Present when the 50k-trade hard cap was hit; older trades aren't factored in. */
+  truncated_trades?: number;
+}
+
+export interface WalletPnlResponse {
+  address: string;
+  window_days: number;
+  summary: WalletPnlSummary;
+  /** Sparse daily UTC buckets — only days with at least one realized event. */
+  pnl_curve: WalletPnlCurvePoint[];
+  /** Sorted by pnl_sol DESC — best winners first. */
+  closed_positions: WalletClosedPosition[];
+  open_positions:   WalletOpenPosition[];
+  notes: WalletPnlNotes;
+  cache_hit?: boolean;
+  /** Only present on cache hits. */
+  computed_at?: string;
+  /** Only present on cache misses — TTL for this row in wallet_analyses. */
+  ttl_seconds?: number;
+  _rid?: string;
+}
+
+export interface WalletPositionsResponse {
+  address: string;
+  positions: WalletOpenPosition[];
+  cache_hit?: boolean;
+  computed_at?: string | null;
+  ttl_seconds?: number | null;
+  _rid?: string;
+}
+
+export interface WalletTradesParams {
+  /** 1–500, default 100. */
+  limit?: number;
+  /** From `next_cursor` of a previous response. */
+  cursor?: string;
+  action?: "buy" | "sell";
+  /** Filter to a single token mint. */
+  token_mint?: string;
+  /** Unix epoch seconds — default now-90d. */
+  since?: number;
+  /** Unix epoch seconds — default now. */
+  until?: number;
+}
+
+export interface WalletTrade {
+  tx_signature: string;
+  token_mint:   string;
+  action: "buy" | "sell";
+  sol_amount:   number;
+  token_amount: number;
+  block_time:   number;
+  traded_at:    string;
+}
+
+export interface WalletTradesFilters {
+  action: "buy" | "sell" | null;
+  token_mint: string | null;
+  since: number;
+  until: number;
+}
+
+export interface WalletTradesResponse {
+  address: string;
+  trades:  WalletTrade[];
+  /** Pass as `cursor` on the next call. null when the end of the result set is reached. */
+  next_cursor: string | null;
+  has_more: boolean;
+  filters: WalletTradesFilters;
+  _rid?: string;
+}
+
 // ─── Token intelligence types (/token/{mint}) ─────────────────────────────────
 
 export type TokenKolSignal = "accumulating" | "distributing" | "neutral";
@@ -2112,6 +2291,100 @@ class WalletTrackerClient {
   }
 }
 
+// ─── Universal wallet namespace (/wallet/{address}/*) ───────────────────────
+// New 2026-05-20. Works on any Solana wallet — not just curated KOLs.
+// Backed by FIFO cost-basis math on the last 90 days of token_trades.
+// Cached in wallet_analyses with dynamic TTL. PRO+ on every method.
+
+class WalletClient {
+  constructor(
+    private readonly _get: <T>(url: string) => Promise<T>,
+    private readonly _baseUrl: string,
+  ) {}
+
+  /**
+   * Aggregate stats for any wallet over the last 90 days, plus cross-product
+   * flags from KOL / alpha / deployer tables. Sub-100ms even on heavy wallets.
+   * Returns 404 if the wallet has no trades AND no flag-table presence.
+   * **PRO+**.
+   * @param address Solana wallet address (base58, 32–44 chars).
+   * @example
+   * ```ts
+   * const { stats, flags } = await client.wallet.stats("ASVz...ybJk");
+   * console.log(`${flags.kol_name ?? address}: ${stats?.total_trades} trades`);
+   * ```
+   */
+  stats(address: string): Promise<WalletStatsResponse> {
+    return this._get(buildUrl(this._baseUrl, `/wallet/${encodeURIComponent(address)}`));
+  }
+
+  /**
+   * Full FIFO cost-basis PnL: realized + unrealized SOL, profit factor, max
+   * drawdown, hold-time stats, daily UTC PnL curve, closed positions sorted by
+   * pnl desc, open positions hydrated with live prices from mc-tracker.
+   *
+   * Cached in `wallet_analyses` with dynamic TTL (5min/1h/24h based on last
+   * activity). Cache hits don't count against your daily quota and return in
+   * < 5ms.
+   *
+   * **Cost-basis honesty:** observable only inside the data window — wallets
+   * that sold tokens bought before that window have the overflow silently
+   * discarded rather than fabricated. `notes.cost_basis_observable_from`
+   * makes the cutoff visible.
+   *
+   * **PRO+**.
+   * @param address Solana wallet address.
+   * @example
+   * ```ts
+   * const pnl = await client.wallet.pnl("ASVz...ybJk");
+   * console.log(`Realized: ${pnl.summary.realized_sol} SOL`);
+   * console.log(`Win rate: ${(pnl.summary.win_rate! * 100).toFixed(1)}%`);
+   * for (const c of pnl.closed_positions.slice(0, 5)) {
+   *   console.log(`  ${c.token_mint.slice(0,8)}…  ${c.pnl_sol > 0 ? '+' : ''}${c.pnl_sol} SOL (${c.roi_pct}% ROI)`);
+   * }
+   * ```
+   */
+  pnl(address: string): Promise<WalletPnlResponse> {
+    return this._get(buildUrl(this._baseUrl, `/wallet/${encodeURIComponent(address)}/pnl`));
+  }
+
+  /**
+   * Open positions only — lighter slice of `pnl()` for UIs that don't need the
+   * summary or curve. Shares the `wallet_analyses` cache: calling this right
+   * after `pnl()` is an immediate cache hit. **PRO+**.
+   * @param address Solana wallet address.
+   */
+  positions(address: string): Promise<WalletPositionsResponse> {
+    return this._get(buildUrl(this._baseUrl, `/wallet/${encodeURIComponent(address)}/positions`));
+  }
+
+  /**
+   * Cursor-paginated raw trades. Default window is the last 90 days; override
+   * via `since`/`until` (Unix epoch seconds). Default limit 100, max 500.
+   *
+   * Pagination is stable across DESC ordering — keep paging with `next_cursor`
+   * until `has_more === false`. **PRO+**.
+   *
+   * @example
+   * ```ts
+   * let cursor: string | undefined;
+   * while (true) {
+   *   const page = await client.wallet.trades("ASVz...ybJk", { limit: 200, cursor, action: "buy" });
+   *   for (const t of page.trades) processBuy(t);
+   *   if (!page.has_more) break;
+   *   cursor = page.next_cursor!;
+   * }
+   * ```
+   */
+  trades(address: string, params?: WalletTradesParams): Promise<WalletTradesResponse> {
+    return this._get(buildUrl(
+      this._baseUrl,
+      `/wallet/${encodeURIComponent(address)}/trades`,
+      params as Record<string, string | number | undefined>,
+    ));
+  }
+}
+
 // ─── Coordination alerts namespace (v1.1) ───────────────────────────────────
 
 class CoordinationAlertsClient {
@@ -2302,6 +2575,8 @@ export class MadeOnSol {
   readonly webhooks: WebhookClient;
   /** Wallet tracker: watchlist CRUD, trades, and per-wallet stats. */
   readonly walletTracker: WalletTrackerClient;
+  /** Universal wallet endpoints — stats, FIFO PnL, open positions, paginated trades for any Solana wallet. PRO+. */
+  readonly wallet: WalletClient;
   /** Coordination alert rules CRUD (v1.1) — PRO/ULTRA. */
   readonly coordinationAlerts: CoordinationAlertsClient;
   /** First-touch webhook subscriptions CRUD — ULTRA only. Use `kol.firstTouches()` for read-only queries. */
@@ -2339,6 +2614,7 @@ export class MadeOnSol {
     this.stream = new StreamClient(boundPost, this._baseUrl);
     this.webhooks = new WebhookClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
     this.walletTracker = new WalletTrackerClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
+    this.wallet = new WalletClient(boundGet, this._baseUrl);
     this.coordinationAlerts = new CoordinationAlertsClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
     this.firstTouchSubscriptions = new FirstTouchSubscriptionsClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
   }
