@@ -445,6 +445,87 @@ Returns: `WalletTrackerSummaryResponse`
 
 ---
 
+### Universal Wallet — `client.wallet` *(new in 2.7)*
+
+Per-wallet endpoints that work on **any** Solana wallet, not just curated KOLs. FIFO cost-basis PnL over the last 90 days. PRO+ on every method. Results are cached server-side in `wallet_analyses` with dynamic TTL (5min / 1h / 24h based on last activity); cache hits don't count against your daily quota.
+
+**Cost-basis honesty:** observable only inside the 90-day data window. Wallets that sold tokens bought before that window have the overflow silently discarded rather than fabricated. `notes.cost_basis_observable_from` makes the cutoff visible per call.
+
+#### `client.wallet.stats(address)`
+
+Aggregate stats over 90d plus cross-product flags (KOL / alpha / deployer).
+
+```ts
+const { stats, flags } = await client.wallet.stats("ASVz...ybJk");
+console.log(`${flags.kol_name ?? address}: ${stats?.total_trades} trades across ${stats?.unique_tokens} tokens`);
+if (flags.is_alpha_tracked && flags.alpha_win_rate != null) {
+  console.log(`Alpha win rate: ${(flags.alpha_win_rate * 100).toFixed(0)}%`);
+}
+```
+
+Returns: `WalletStatsResponse` (404 if the wallet has no trades and no flag-table presence).
+
+---
+
+#### `client.wallet.pnl(address)`
+
+Full FIFO cost-basis PnL: realized + unrealized SOL, profit factor, max drawdown, avg + median hold minutes, daily UTC PnL curve, closed positions sorted by pnl desc (with ROI %, hold time, win/loss), and open positions hydrated with live current prices from the market-cap tracker.
+
+```ts
+const pnl = await client.wallet.pnl("ASVz...ybJk");
+console.log(`Realized: ${pnl.summary.realized_sol} SOL · Unrealized: ${pnl.summary.unrealized_sol} SOL`);
+console.log(`Win rate: ${(pnl.summary.win_rate! * 100).toFixed(1)}% · PF: ${pnl.summary.profit_factor}`);
+for (const c of pnl.closed_positions.slice(0, 5)) {
+  const sign = c.pnl_sol > 0 ? "+" : "";
+  console.log(`  ${c.token_mint.slice(0,8)}…  ${sign}${c.pnl_sol} SOL  (${c.roi_pct}% ROI, ${c.hold_minutes}m hold)`);
+}
+```
+
+Returns: `WalletPnlResponse`. Cache hits include `cache_hit: true` + `computed_at`; misses include `ttl_seconds`.
+
+---
+
+#### `client.wallet.positions(address)`
+
+Open positions only — lighter slice of `pnl()`. Shares the same cache, so calling this right after `pnl()` is an immediate hit.
+
+```ts
+const { positions } = await client.wallet.positions("ASVz...ybJk");
+for (const p of positions) {
+  const u = p.unrealized_sol;
+  console.log(`  ${p.token_mint.slice(0,8)}…  cost ${p.cost_basis_sol} SOL  unrealized ${u ?? "—"} SOL  (${p.unrealized_pct ?? "—"}%)`);
+}
+```
+
+Returns: `WalletPositionsResponse`. Mints without a current price return `unrealized_sol: null` rather than fabricated zero.
+
+---
+
+#### `client.wallet.trades(address, params?)`
+
+Cursor-paginated raw trades. Default window is the last 90 days; override via `since` / `until` (Unix epoch seconds). Default limit 100, max 500.
+
+```ts
+let cursor: string | undefined;
+while (true) {
+  const page = await client.wallet.trades("ASVz...ybJk", { limit: 200, cursor, action: "buy" });
+  for (const t of page.trades) processBuy(t);
+  if (!page.has_more) break;
+  cursor = page.next_cursor!;
+}
+```
+
+Params:
+- `limit` — 1-500, default 100
+- `cursor` — from `next_cursor` of previous response
+- `action` — `"buy"` or `"sell"`
+- `token_mint` — filter to one token
+- `since` / `until` — Unix epoch seconds (default last 90d)
+
+Returns: `WalletTradesResponse` with `trades[]` + `next_cursor` + `has_more` + `filters` echo.
+
+---
+
 ### Deployer Hunter — `client.deployer`
 
 #### `client.deployer.stats()`
