@@ -1340,11 +1340,69 @@ export interface WalletFlags {
   deployer_bonding_rate:    number | null;
 }
 
+// v1.8.1 enrichments — additive, nullable. Old SDK consumers ignoring these
+// fields keep working when the server adds more enrichment fields.
+export interface WalletTopToken {
+  token_mint:       string;
+  token_symbol:     string | null;
+  buys:             number;
+  sells:            number;
+  sol_in:           number;
+  sol_out:          number;
+  realized_pnl_sol: number;
+  current_mc_usd:   number | null;
+  peak_mc_usd:      number | null;
+  last_traded_at:   string;
+}
+
+export interface WalletTradingStyle {
+  total_trades:            number;
+  avg_trade_size_sol:      number;
+  /** 0-1: fraction of trades with early_buyer_rank ≤ 10. */
+  sniper_rate:             number;
+  early_entries:           number;
+  /** 0-1: fraction of tokens with both buys and sells. */
+  round_trip_rate:         number;
+  tokens_with_round_trips: number;
+  median_hold_minutes:     number | null;
+  dominant_action:         "buy" | "sell" | "balanced";
+}
+
+export interface WalletDeployerTierEntry {
+  /** "elite" | "good" | "rising" | "moderate" | "cold" | "unranked" */
+  tier:  string;
+  count: number;
+}
+
+export interface WalletDeployerBreakdown {
+  total_tokens:      number;
+  tracked_deployers: number;
+  by_tier:           WalletDeployerTierEntry[];
+}
+
+export interface WalletRecentTrade {
+  token_mint:    string;
+  token_symbol:  string | null;
+  action:        "buy" | "sell";
+  sol_amount:    number;
+  block_time:    number;
+  traded_at:     string;
+  tx_signature:  string;
+}
+
 export interface WalletStatsResponse {
   address: string;
   /** Null if the wallet has no trades in the window but does appear in flag tables. */
   stats: WalletStats | null;
   flags: WalletFlags;
+  /** Top traded tokens with realized PnL (v1.8.1+). Optional for forward-compat. */
+  top_tokens?:         WalletTopToken[];
+  /** Trading-style signals (v1.8.1+): avg size, sniper rate, round-trip rate, hold time. */
+  trading_style?:      WalletTradingStyle | null;
+  /** Pump.fun deployer-tier distribution this wallet bought from (v1.8.1+). */
+  deployer_breakdown?: WalletDeployerBreakdown | null;
+  /** Last 10 raw trades with symbols joined (v1.8.1+). */
+  recent_trades?:      WalletRecentTrade[];
   _rid?: string;
 }
 
