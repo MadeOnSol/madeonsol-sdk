@@ -205,6 +205,76 @@ WebSocket delivery: subscribe to channel `kol:coordination` on `wss://madeonsol.
 
 ---
 
+#### `client.priceAlerts.*` *(new in 2.8)*
+
+**Sub-second token MC dip/recovery alerts.** Set a drop threshold on any token — when MC drops below baseline, a `price_alert:dip` event fires. Optionally track recovery. **PRO: 5 alerts, ULTRA: 25 alerts.**
+
+```ts
+// Create: alert when token drops 20%, then notify when it recovers 15% from the dip low
+const { alert, webhook_secret } = await client.priceAlerts.create({
+  token_mint: "So11111111111111111111111111111111111111112",
+  drop_pct: 20,
+  recovery_pct: 15,
+  name: "SOL dip tracker",
+  delivery_mode: "webhook",
+  webhook_url: "https://example.com/dip-hook",
+});
+
+await client.priceAlerts.list();
+await client.priceAlerts.get(alert.id);
+await client.priceAlerts.update(alert.id, { name: "Renamed", is_active: false });
+await client.priceAlerts.delete(alert.id);
+
+// Event history (30-day retention)
+const { events } = await client.priceAlerts.events({ event_type: "dip", limit: 50 });
+```
+
+Alert lifecycle: `watching` -> `dipped` -> `recovered` (terminal). One-shot per alert. Baseline MC captured at creation time. 30-day auto-expiry. Thresholds immutable — delete and recreate to change.
+
+WebSocket: subscribe to channel `price_alert:events` — user-scoped. Webhook: per-alert HMAC-SHA256 signed (same scheme as coordination alerts).
+
+---
+
+#### `client.kol.scoutLeaderboard(params?)` *(new in 2.8)*
+
+Scout leaderboard: top KOLs ranked by scout score, first-touch frequency, and swarm attraction rate. **ULTRA only.**
+
+```ts
+const data = await client.kol.scoutLeaderboard({ limit: 20, scout_tier: "S", sort: "scout_score" });
+```
+
+---
+
+#### `client.kol.coordinationHistory(params?)` *(new in 2.8)*
+
+Historical coordination alert fires — past events with token, score, KOL count. **ULTRA only.**
+
+```ts
+const data = await client.kol.coordinationHistory({ limit: 50, min_score: 70 });
+```
+
+---
+
+#### `client.token.kolConsensus(mint)` *(new in 2.8)*
+
+KOL consensus on a token: how many bought/sold, exit rate, net flow, median entry MC. **ULTRA** gets individual wallet arrays.
+
+```ts
+const consensus = await client.token.kolConsensus("4sVahM4U8js62mQV58ABSkNRhf6Ztc7Xs2LXUznNpump");
+```
+
+---
+
+#### `client.token.peakHistory(mint)` *(new in 2.8)*
+
+Peak MC history: ATH, decline from peak, MC at bond and at 1h/6h/24h/7d after bond.
+
+```ts
+const peak = await client.token.peakHistory("4sVahM4U8js62mQV58ABSkNRhf6Ztc7Xs2LXUznNpump");
+```
+
+---
+
 #### `client.kol.firstTouches(params?)` *(new in 2.2)*
 
 Recent first-KOL-touch events on tokens — every time a tracked KOL was the first to buy a given mint. Filterable by **scout tier** (S/A/B/C from the per-KOL `mv_kol_scout_score` view), KOL winrate, token age, mint suffix, etc.
@@ -453,13 +523,16 @@ Per-wallet endpoints that work on **any** Solana wallet, not just curated KOLs. 
 
 #### `client.wallet.stats(address)`
 
-Aggregate stats over 90d plus cross-product flags (KOL / alpha / deployer).
+Aggregate stats over 90d plus cross-product flags (KOL / alpha / deployer). Includes enrichments: top traded tokens with realized PnL, trading style, deployer tier mix, recent trades. **v2.8** adds `derived` block: win rate, ROI, best/worst trade, biggest miss (token sold that later mooned), and AI-classified verdict.
 
 ```ts
-const { stats, flags } = await client.wallet.stats("ASVz...ybJk");
-console.log(`${flags.kol_name ?? address}: ${stats?.total_trades} trades across ${stats?.unique_tokens} tokens`);
-if (flags.is_alpha_tracked && flags.alpha_win_rate != null) {
-  console.log(`Alpha win rate: ${(flags.alpha_win_rate * 100).toFixed(0)}%`);
+const { stats, flags, derived } = await client.wallet.stats("ASVz...ybJk");
+console.log(`${flags.kol_name ?? address}: ${stats?.total_trades} trades`);
+if (derived?.verdict) {
+  console.log(`${derived.verdict.label}: ${derived.verdict.description}`);
+}
+if (derived?.biggest_miss) {
+  console.log(`Biggest miss: ${derived.biggest_miss.token_symbol} — missed +${derived.biggest_miss.missed_sol.toFixed(1)} SOL`);
 }
 ```
 

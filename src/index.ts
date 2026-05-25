@@ -347,6 +347,161 @@ export interface CoordinationAlertDeleteResponse {
   deleted: boolean;
 }
 
+// ─── Price alerts (v1.9) ────────────────────────────────────────────────────
+
+export type PriceAlertDeliveryMode = "webhook" | "websocket" | "both";
+export type PriceAlertStatus = "watching" | "dipped" | "recovered" | "expired";
+
+export interface PriceAlertCreateParams {
+  /** Solana mint address. */
+  token_mint: string;
+  /** Drop % threshold (0.01–99.99). Alert fires when MC drops below baseline × (1 − drop_pct/100). */
+  drop_pct: number;
+  /** Recovery % threshold (0.01–1000). After dip fires, alert fires again when MC rises above dip_low × (1 + recovery_pct/100). Optional. */
+  recovery_pct?: number;
+  /** Optional label. */
+  name?: string;
+  /** Default: "webhook". */
+  delivery_mode?: PriceAlertDeliveryMode;
+  /** Required when delivery_mode is "webhook" or "both". Must be HTTPS. */
+  webhook_url?: string;
+}
+
+export interface PriceAlertUpdateParams {
+  name?: string | null;
+  delivery_mode?: PriceAlertDeliveryMode;
+  webhook_url?: string | null;
+  is_active?: boolean;
+}
+
+export interface PriceAlert {
+  id: number;
+  name: string | null;
+  token_mint: string;
+  token_symbol: string | null;
+  baseline_mc_usd: number;
+  drop_pct: number;
+  recovery_pct: number | null;
+  status: PriceAlertStatus;
+  dip_low_mc_usd: number | null;
+  dip_fired_at: string | null;
+  delivery_mode: PriceAlertDeliveryMode;
+  webhook_url: string | null;
+  is_active: boolean;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PriceAlertListResponse {
+  alerts: PriceAlert[];
+  _rid?: string;
+}
+
+export interface PriceAlertCreateResponse {
+  alert: PriceAlert;
+  /** One-time HMAC secret. Save it — will not be shown again. */
+  webhook_secret: string | null;
+  note?: string;
+}
+
+export interface PriceAlertGetResponse {
+  alert: PriceAlert;
+}
+
+export interface PriceAlertUpdateResponse {
+  alert: PriceAlert;
+}
+
+export interface PriceAlertDeleteResponse {
+  deleted: boolean;
+}
+
+export interface PriceAlertEvent {
+  id: number;
+  alert_id: number;
+  event_type: "dip" | "recovery";
+  fired_at: string;
+  token_mint: string;
+  baseline_mc_usd: number;
+  current_mc_usd: number;
+  drop_pct_actual: number | null;
+  dip_low_mc_usd: number | null;
+  recovery_pct_actual: number | null;
+  delivered: boolean;
+}
+
+export interface PriceAlertEventsParams {
+  alert_id?: number;
+  event_type?: "dip" | "recovery";
+  since?: string;
+  limit?: number;
+}
+
+export interface PriceAlertEventsResponse {
+  events: PriceAlertEvent[];
+  _rid?: string;
+}
+
+// ─── Scout leaderboard (v1.9) ──────────────────────────────────────────────
+
+export type ScoutLeaderboardSort = "swarm_3plus_pct" | "n_first_touches_30d" | "swarm_5plus_pct" | "scout_score";
+
+export interface ScoutLeaderboardParams {
+  limit?: number;
+  scout_tier?: ScoutTier;
+  sort?: ScoutLeaderboardSort;
+}
+
+// ─── KOL consensus (v1.9) ──────────────────────────────────────────────────
+
+export interface KolConsensusResponse {
+  total_kol_buyers: number;
+  total_kol_sellers: number;
+  kol_exit_rate: number | null;
+  net_flow_sol: number;
+  total_buy_sol: number;
+  total_sell_sol: number;
+  first_kol_buy_at: string | null;
+  last_kol_buy_at: string | null;
+  first_touch_wallet: string | null;
+  first_touch_at: string | null;
+  median_entry_mc_usd: number | null;
+  /** ULTRA only — individual buyer wallets. */
+  buyers?: string[];
+  /** ULTRA only — wallets that fully exited. */
+  exited?: string[];
+  _rid?: string;
+}
+
+// ─── Peak history (v1.9) ───────────────────────────────────────────────────
+
+export interface PeakHistoryResponse {
+  peak_mc_usd: number | null;
+  peak_mc_updated_at: string | null;
+  current_mc_usd: number | null;
+  current_price_usd: number | null;
+  decline_from_peak_pct: number | null;
+  mc_at_bond: number | null;
+  mc_1h_after_bond: number | null;
+  mc_6h_after_bond: number | null;
+  mc_24h_after_bond: number | null;
+  mc_7d_after_bond: number | null;
+  still_alive_1h: boolean | null;
+  time_to_bond_minutes: number | null;
+  deployed_at: string | null;
+  bonded_at: string | null;
+  _rid?: string;
+}
+
+// ─── Coordination history (v1.9) ───────────────────────────────────────────
+
+export interface CoordinationHistoryParams {
+  limit?: number;
+  since?: string;
+  min_score?: number;
+}
+
 // ─── First-touch signal ─────────────────────────────────────────────────────
 
 export type ScoutTier = "S" | "A" | "B" | "C";
@@ -1390,6 +1545,43 @@ export interface WalletRecentTrade {
   tx_signature:  string;
 }
 
+export interface WalletStandoutTrade {
+  token_mint:    string;
+  token_symbol:  string | null;
+  pnl_sol:       number;
+  sol_in:        number;
+  sol_out:       number;
+  roi_pct:       number;
+}
+
+export interface WalletBiggestMiss {
+  token_mint:           string;
+  token_symbol:         string | null;
+  actual_sol_out:       number;
+  potential_sol_at_ath:  number;
+  missed_sol:           number;
+  ath_mc_usd:           number;
+  sold_at_mc_usd:       number | null;
+}
+
+export type WalletVerdictTone = "green" | "red" | "amber" | "muted";
+
+export interface WalletVerdict {
+  label:       string;
+  description: string;
+  tone:        WalletVerdictTone;
+}
+
+export interface WalletDerivedStats {
+  win_rate:               number | null;
+  roi_pct:                number | null;
+  total_realized_pnl_sol: number;
+  best_trade:             WalletStandoutTrade | null;
+  worst_trade:            WalletStandoutTrade | null;
+  biggest_miss:           WalletBiggestMiss | null;
+  verdict:                WalletVerdict | null;
+}
+
 export interface WalletStatsResponse {
   address: string;
   /** Null if the wallet has no trades in the window but does appear in flag tables. */
@@ -1403,6 +1595,8 @@ export interface WalletStatsResponse {
   deployer_breakdown?: WalletDeployerBreakdown | null;
   /** Last 10 raw trades with symbols joined (v1.8.1+). */
   recent_trades?:      WalletRecentTrade[];
+  /** Derived analytics: win rate, ROI, best/worst trade, biggest miss, verdict (v1.9+). */
+  derived?:            WalletDerivedStats;
   _rid?: string;
 }
 
@@ -2079,6 +2273,22 @@ class KolClient {
   firstTouches(params?: FirstTouchesParams): Promise<FirstTouchesResponse> {
     return this._fetch(buildUrl(this._baseUrl, "/kol/first-touches", params as Record<string, string | number | undefined>));
   }
+
+  /**
+   * v1.9 — Scout leaderboard: top KOLs ranked by scout score, first-touch frequency,
+   * and swarm attraction rate. ULTRA only.
+   */
+  scoutLeaderboard(params?: ScoutLeaderboardParams): Promise<unknown> {
+    return this._fetch(buildUrl(this._baseUrl, "/kol/scouts/leaderboard", params as Record<string, string | number | undefined>));
+  }
+
+  /**
+   * v1.9 — Coordination history: past coordination alert fires with token, score, KOL count.
+   * ULTRA only.
+   */
+  coordinationHistory(params?: CoordinationHistoryParams): Promise<unknown> {
+    return this._fetch(buildUrl(this._baseUrl, "/kol/coordination/history", params as Record<string, string | number | undefined>));
+  }
 }
 
 // ─── Alpha namespace ─────────────────────────────────────────────────────────
@@ -2199,6 +2409,22 @@ class TokenClient {
   list(params?: TokenListParams): Promise<TokenListResponse> {
     return this._fetch(buildUrl(this._baseUrl, "/tokens", params as Record<string, string | number | boolean | undefined>));
   }
+
+  /**
+   * v1.9 — KOL consensus on a token: how many KOLs bought/sold, exit rate,
+   * net flow, median entry MC. ULTRA gets individual wallet arrays.
+   */
+  kolConsensus(mint: string): Promise<KolConsensusResponse> {
+    return this._fetch(buildUrl(this._baseUrl, `/tokens/${encodeURIComponent(mint)}/kol-consensus`));
+  }
+
+  /**
+   * v1.9 — Peak MC history for a token: ATH, decline from peak, MC at bond
+   * and at 1h/6h/24h/7d after bond.
+   */
+  peakHistory(mint: string): Promise<PeakHistoryResponse> {
+    return this._fetch(buildUrl(this._baseUrl, `/tokens/${encodeURIComponent(mint)}/peak-history`));
+  }
 }
 
 // ─── Deployer namespace ───────────────────────────────────────────────────────
@@ -2280,9 +2506,10 @@ class DeployerClient {
    * Deployer skill curve — streaks, rolling bond rate, improvement trend, deployment cadence.
    * Requires Pro or Ultra subscription.
    * @param wallet Deployer wallet address.
+   * @param params Optional: `include: "daily_snapshots"` for up to 90 daily tier/bonding snapshots.
    */
-  trajectory(wallet: string): Promise<DeployerTrajectoryResponse> {
-    return this._fetch(buildUrl(this._baseUrl, `/deployer-hunter/${encodeURIComponent(wallet)}/trajectory`));
+  trajectory(wallet: string, params?: { include?: "daily_snapshots" }): Promise<DeployerTrajectoryResponse> {
+    return this._fetch(buildUrl(this._baseUrl, `/deployer-hunter/${encodeURIComponent(wallet)}/trajectory`, params as Record<string, string | undefined>));
   }
 }
 
@@ -2531,6 +2758,57 @@ class FirstTouchSubscriptionsClient {
   }
 }
 
+// ─── Price Alerts namespace (v1.9) ──────────────────────────────────────────
+
+class PriceAlertsClient {
+  constructor(
+    private readonly _get: <T>(url: string) => Promise<T>,
+    private readonly _post: <T>(url: string, body?: unknown) => Promise<T>,
+    private readonly _patch: <T>(url: string, body?: unknown) => Promise<T>,
+    private readonly _delete: <T>(url: string) => Promise<T>,
+    private readonly _baseUrl: string,
+  ) {}
+
+  /**
+   * List your price alerts.
+   * Requires PRO or ULTRA.
+   */
+  list(): Promise<PriceAlertListResponse> {
+    return this._get(buildUrl(this._baseUrl, "/price-alerts"));
+  }
+
+  /**
+   * Create a price alert. Captures baseline MC from current token_prices.
+   * Returns the alert plus a one-time `webhook_secret`.
+   * Tier quotas: PRO 5 alerts, ULTRA 25 alerts.
+   */
+  create(params: PriceAlertCreateParams): Promise<PriceAlertCreateResponse> {
+    return this._post(buildUrl(this._baseUrl, "/price-alerts"), params);
+  }
+
+  /** Fetch a single alert by id. */
+  get(id: number | string): Promise<PriceAlertGetResponse> {
+    return this._get(buildUrl(this._baseUrl, `/price-alerts/${encodeURIComponent(id)}`));
+  }
+
+  /** Update alert name, delivery mode, webhook URL, or is_active. Thresholds are immutable. */
+  update(id: number | string, params: PriceAlertUpdateParams): Promise<PriceAlertUpdateResponse> {
+    return this._patch(buildUrl(this._baseUrl, `/price-alerts/${encodeURIComponent(id)}`), params);
+  }
+
+  /** Delete an alert and its event history. */
+  delete(id: number | string): Promise<PriceAlertDeleteResponse> {
+    return this._delete(buildUrl(this._baseUrl, `/price-alerts/${encodeURIComponent(id)}`));
+  }
+
+  /**
+   * Fired event history (30-day retention). Filter by alert_id, event_type, since.
+   */
+  events(params?: PriceAlertEventsParams): Promise<PriceAlertEventsResponse> {
+    return this._get(buildUrl(this._baseUrl, "/price-alerts/events", params as Record<string, string | number | undefined>));
+  }
+}
+
 // ─── Tools namespace ─────────────────────────────────────────────────────────
 
 class ToolsClient {
@@ -2639,6 +2917,8 @@ export class MadeOnSol {
   readonly coordinationAlerts: CoordinationAlertsClient;
   /** First-touch webhook subscriptions CRUD — ULTRA only. Use `kol.firstTouches()` for read-only queries. */
   readonly firstTouchSubscriptions: FirstTouchSubscriptionsClient;
+  /** Price alerts CRUD — PRO/ULTRA. Sub-second dip/recovery detection. */
+  readonly priceAlerts: PriceAlertsClient;
 
   private readonly _apiKey: string;
   private readonly _baseUrl: string;
@@ -2675,6 +2955,7 @@ export class MadeOnSol {
     this.wallet = new WalletClient(boundGet, this._baseUrl);
     this.coordinationAlerts = new CoordinationAlertsClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
     this.firstTouchSubscriptions = new FirstTouchSubscriptionsClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
+    this.priceAlerts = new PriceAlertsClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
   }
 
   private _headers(): Record<string, string> {
