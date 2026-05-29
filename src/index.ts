@@ -2576,6 +2576,140 @@ class WalletTrackerClient {
   }
 }
 
+// ─── Sniper: deshred pre-confirm pump.fun deploy feed (PRO + ULTRA) ─────────
+// Deploys are reconstructed from shred-level ("deshred") data and surface
+// ~500ms before the chain confirms them — the fastest path to a new pump.fun
+// launch. PRO is curated to elite/good deployers; ULTRA sees every deployer
+// tier and can maintain a custom deployer watchlist.
+
+export interface SniperDeploy {
+  mint: string;
+  name: string | null;
+  symbol: string | null;
+  deployer_wallet: string;
+  signature: string;
+  slot: number;
+  detected_at: string;
+  detection_region: string;
+  detection_confirmed: boolean;
+  deployer_tier: string | null;
+  deployer_bond_rate: number | null;
+  deployer_total_bonded: number | null;
+  deployer_recent: string | null;
+  /** "deshred" — detection is pre-execution, so the payload carries no MC/logs/balances. */
+  confirmed_on_chain: boolean | null;
+  confirmed_at: string | null;
+}
+
+export interface SniperRecentParams {
+  /** Only deploys detected after this ISO-8601 timestamp. */
+  since?: string;
+  /** Filter by deployer reputation tier (ULTRA; PRO is always elite/good). */
+  deployer_tier?: "elite" | "good" | "moderate" | "rising" | "cold" | "unranked";
+  /** Minimum deployer lifetime bond rate (0–1). */
+  min_bond_rate?: number;
+  /** Max results, 1–200 (default 50). */
+  limit?: number;
+  /** ULTRA: narrow the feed to your custom deployer watchlist (any tier). */
+  watchlist?: boolean;
+}
+
+export interface SniperRecentResponse {
+  deploys: SniperDeploy[];
+  count: number;
+  data_age_seconds: number | null;
+  /** Present (true) when watchlist mode was requested but the watchlist is empty. */
+  watchlist_empty?: boolean;
+}
+
+export interface SniperByDeployerResponse {
+  deployer: string;
+  deploys: SniperDeploy[];
+  count: number;
+}
+
+export interface SniperWatchlistEntry {
+  deployer_wallet: string;
+  label: string | null;
+  created_at: string;
+}
+
+export interface SniperWatchlistResponse {
+  deployers: SniperWatchlistEntry[];
+  count: number;
+  limit: number;
+  remaining: number;
+}
+
+export interface SniperWatchlistAddParams {
+  /** A single deployer wallet to add. */
+  wallet?: string;
+  /** Bulk add (max 50 total). */
+  wallets?: string[];
+  /** Optional label applied to the added deployer(s). */
+  label?: string;
+}
+
+export interface SniperWatchlistAddResponse {
+  added: number;
+  deployers?: string[];
+  message?: string;
+}
+
+export interface SniperWatchlistRemoveResponse {
+  removed: string;
+}
+
+/**
+ * Deshred pre-confirm pump.fun sniper feed. PRO + ULTRA.
+ * Live alerts flow via webhook (`sniper:deploy`), the `sniper:deploys` WebSocket
+ * channel, or Telegram (`/alert sniper`); these methods are for catch-up,
+ * backtesting, and managing the ULTRA custom watchlist.
+ */
+class SniperClient {
+  constructor(
+    private readonly _get: <T>(url: string) => Promise<T>,
+    private readonly _post: <T>(url: string, body?: unknown) => Promise<T>,
+    private readonly _delete: <T>(url: string) => Promise<T>,
+    private readonly _baseUrl: string,
+  ) {}
+
+  /**
+   * Newest-first deshred deploy feed. PRO sees elite/good deployers; ULTRA sees all.
+   * Pass `watchlist: true` (ULTRA) to narrow to your custom deployer watchlist.
+   */
+  recent(params?: SniperRecentParams): Promise<SniperRecentResponse> {
+    const q: Record<string, string | number | undefined> = {
+      since: params?.since,
+      deployer_tier: params?.deployer_tier,
+      min_bond_rate: params?.min_bond_rate,
+      limit: params?.limit,
+      watchlist: params?.watchlist ? "true" : undefined,
+    };
+    return this._get(buildUrl(this._baseUrl, "/sniper/recent", q));
+  }
+
+  /** Deshred deploys filtered to a single deployer wallet. ULTRA only. */
+  byDeployer(wallet: string, params?: { limit?: number }): Promise<SniperByDeployerResponse> {
+    return this._get(buildUrl(this._baseUrl, `/sniper/by-deployer/${encodeURIComponent(wallet)}`, params as Record<string, number | undefined>));
+  }
+
+  /** List your custom deployer watchlist (ULTRA, max 50). */
+  watchlist(): Promise<SniperWatchlistResponse> {
+    return this._get(buildUrl(this._baseUrl, "/sniper/watchlist"));
+  }
+
+  /** Add one (`wallet`) or many (`wallets`) deployers to your watchlist. ULTRA only. */
+  addToWatchlist(params: SniperWatchlistAddParams): Promise<SniperWatchlistAddResponse> {
+    return this._post(buildUrl(this._baseUrl, "/sniper/watchlist"), params);
+  }
+
+  /** Remove a deployer from your watchlist. ULTRA only. */
+  removeFromWatchlist(wallet: string): Promise<SniperWatchlistRemoveResponse> {
+    return this._delete(buildUrl(this._baseUrl, `/sniper/watchlist/${encodeURIComponent(wallet)}`));
+  }
+}
+
 // ─── Universal wallet namespace (/wallet/{address}/*) ───────────────────────
 // New 2026-05-20. Works on any Solana wallet — not just curated KOLs.
 // Backed by FIFO cost-basis math on the last 90 days of token_trades.
@@ -2919,6 +3053,8 @@ export class MadeOnSol {
   readonly firstTouchSubscriptions: FirstTouchSubscriptionsClient;
   /** Price alerts CRUD — PRO/ULTRA. Sub-second dip/recovery detection. */
   readonly priceAlerts: PriceAlertsClient;
+  /** Deshred pre-confirm pump.fun sniper feed + custom watchlist — PRO/ULTRA. */
+  readonly sniper: SniperClient;
 
   private readonly _apiKey: string;
   private readonly _baseUrl: string;
@@ -2956,10 +3092,11 @@ export class MadeOnSol {
     this.coordinationAlerts = new CoordinationAlertsClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
     this.firstTouchSubscriptions = new FirstTouchSubscriptionsClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
     this.priceAlerts = new PriceAlertsClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
+    this.sniper = new SniperClient(boundGet, boundPost, boundDelete, this._baseUrl);
   }
 
   private _headers(): Record<string, string> {
-    return { Authorization: `Bearer ${this._apiKey}`, Accept: "application/json" };
+    return { Authorization: `Bearer ${this._apiKey}`, Accept: "application/json", "User-Agent": "madeonsol-sdk/2.9.0" };
   }
 
   /**

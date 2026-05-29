@@ -235,6 +235,28 @@ WebSocket: subscribe to channel `price_alert:events` — user-scoped. Webhook: p
 
 ---
 
+#### `client.sniper.*` — Deshred Sniper Alerts *(new in 2.9)*
+
+**The fastest path to a new pump.fun launch.** Deploys are reconstructed from shred-level (**deshred**) data and surface in the feed **~500ms before the chain confirms them** — a measured head start versus any confirmed-stream feed. **PRO** sees elite + good deployers; **ULTRA** sees every tier and can keep a custom deployer watchlist.
+
+```ts
+// Newest-first deshred deploy feed (PRO: elite/good · ULTRA: all tiers)
+const { deploys } = await client.sniper.recent({ limit: 50, min_bond_rate: 0.5 });
+
+// Audit one deployer's recent launches (ULTRA)
+await client.sniper.byDeployer("7dEx...4pQ8");
+
+// Custom watchlist — get deploys from only the deployers you track, any tier (ULTRA, max 50)
+await client.sniper.addToWatchlist({ wallets: ["7dEx...4pQ8", "9aBc...2zZ1"], label: "alpha devs" });
+await client.sniper.watchlist();
+const { deploys: tracked } = await client.sniper.recent({ watchlist: true });
+await client.sniper.removeFromWatchlist("7dEx...4pQ8");
+```
+
+Detection is pre-execution, so payloads carry no MC/logs/balances — `confirmed_on_chain` is `"deshred"`. For **live** push (not polling), use the `sniper:deploy` webhook event, the `sniper:deploys` WebSocket channel, or `/alert sniper` in the Telegram bot. ~1–3% of detected deploys may abandon before settlement.
+
+---
+
 #### `client.kol.scoutLeaderboard(params?)` *(new in 2.8)*
 
 Scout leaderboard: top KOLs ranked by scout score, first-touch frequency, and swarm attraction rate. **ULTRA only.**
