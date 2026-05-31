@@ -10,7 +10,7 @@
 > ⭐ **[Star on GitHub](https://github.com/LamboPoewert/madeonsol-sdk)** if you find this useful · 📂 **[Examples](./examples/)** · 📚 **[API docs](https://madeonsol.com/api-docs)**
 
 Official TypeScript/JavaScript SDK for the **[MadeOnSol](https://madeonsol.com) Solana API** — zero dependencies, fully typed, works in Node.js ≥ 18 and edge runtimes.
-> Real-time Solana trading intelligence: track 1,000+ KOL wallets with <3s latency, score 6,700+ Pump.fun deployers by reputation, detect multi-KOL coordination signals, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day at [madeonsol.com/pricing](https://madeonsol.com/pricing) — no credit card required.
+> Real-time Solana trading intelligence: track 1,000+ KOL wallets with <3s latency, score 23,000+ Pump.fun deployers by reputation, detect multi-KOL coordination signals, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day at [madeonsol.com/pricing](https://madeonsol.com/pricing) — no credit card required.
 
 > **New in 2.6.1** *(2026-05-13)* — **Velocity types fixed.** Velocity fields are now correctly typed as `mc_change_pct`, `volume_usd`, `mev_volume_pct` — each its own object keyed by `5m`/`15m`/`1h`/`2h`/`4h` — to match the actual API response. The 2.6.0 shape (`velocity[window].mc_change_pct`) was wrong; clients reading it would get `undefined`. Patch is type-only — no runtime breaking changes.
 >
@@ -33,7 +33,7 @@ const { trades } = await client.kol.feed({ limit: 5, action: "buy" });
 | Feature | Description |
 |---|---|
 | **KOL Tracker** | Real-time trade feed, PnL leaderboard with five time windows (today, 7d, 30d, 90d, 180d), coordination detection, per-wallet profiles, and deep PnL analytics for 1,000+ tracked KOL wallets. **180 days of trade history** retained. |
-| **Alpha Wallet Intel** | Leaderboard of 47,000+ scored early-buyer wallets, full wallet profiles, linked-wallet clustering, token cap-table enrichment, and 0–100 buyer quality scores. |
+| **Alpha Wallet Intel** | Leaderboard of 1M+ scored early-buyer wallets, full wallet profiles, linked-wallet clustering, token cap-table enrichment, and 0–100 buyer quality scores. |
 | **Wallet Tracker** | Monitor any Solana wallet for swaps and transfers. Track up to 10/50/100 wallets (Free/Pro/Ultra). Full wallets, counterparties, and tx_signatures on every tier. 120-day event retention. WS events on ULTRA. |
 | **Deployer Hunter** | Pump.fun deployer scoring, tier leaderboard, deploy alerts, and bonding intelligence |
 | **DEX Trade Stream** | Real-time WebSocket stream of ALL Solana DEX trades — filter by token, wallet, program, or trade size (Ultra) |
@@ -395,7 +395,7 @@ Returns: `KolTrendingTokensResponse`
 
 #### `client.alpha.leaderboard(params?)`
 
-Leaderboard of 47,000+ scored early-buyer wallets ranked by win rate, PnL, or ROI.
+Leaderboard of 1M+ scored early-buyer wallets ranked by win rate, PnL, or ROI.
 
 ```ts
 const { wallets } = await client.alpha.leaderboard({
