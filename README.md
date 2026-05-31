@@ -10,13 +10,19 @@
 > ⭐ **[Star on GitHub](https://github.com/LamboPoewert/madeonsol-sdk)** if you find this useful · 📂 **[Examples](./examples/)** · 📚 **[API docs](https://madeonsol.com/api-docs)**
 
 Official TypeScript/JavaScript SDK for the **[MadeOnSol](https://madeonsol.com) Solana API** — zero dependencies, fully typed, works in Node.js ≥ 18 and edge runtimes.
-> Real-time Solana trading intelligence: track 1,000+ KOL wallets with <3s latency, score 23,000+ Pump.fun deployers by reputation, detect multi-KOL coordination signals, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day at [madeonsol.com/pricing](https://madeonsol.com/pricing) — no credit card required.
+> Real-time Solana trading intelligence: track 1,069 KOL wallets with <3s latency, score 23,000+ Pump.fun deployers, surface deshred deploy signals **~500ms before on-chain confirmation**, detect multi-KOL coordination, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day at [madeonsol.com/pricing](https://madeonsol.com/pricing) — no credit card required.
 
+> **New in 2.9** — **Deshred Sniper Alerts.** `client.sniper.recent()` surfaces new pump.fun deploys reconstructed from shred-level data ~500ms before the chain confirms them — a measured head start over any confirmed-stream feed. PRO sees elite/good deployers; ULTRA sees every tier and maintains a custom deployer watchlist (`client.sniper.addToWatchlist()`). Use the `sniper:deploys` WebSocket channel or `sniper:deploy` webhook for live push instead of polling.
+>
+> **New in 2.8** — **Price alerts, scout leaderboard, wallet derived stats.** `client.priceAlerts.*` — CRUD for token MC dip/recovery alerts delivered via webhook or WebSocket (PRO=5, ULTRA=25). `client.kol.scoutLeaderboard()` — top scouts ranked by first-touch follow-on rate. `client.kol.coordinationHistory()` and `client.token.peakHistory()` expose the historical record. `client.wallet.stats()` now returns a `derived` block: `win_rate`, `roi`, `verdict`, and `biggest_miss`.
+>
+> **New in 2.7** — **Universal Wallet API.** `client.wallet.stats()`, `client.wallet.pnl()`, `client.wallet.positions()`, `client.wallet.trades()` — FIFO cost-basis PnL, open positions hydrated with live prices, and cursor-paginated raw trades for **any** Solana wallet (not just curated KOLs). PRO+. Server-side cache (5min/1h/24h based on activity) — cache hits don't count against your quota.
+>
 > **New in 2.6.1** *(2026-05-13)* — **Velocity types fixed.** Velocity fields are now correctly typed as `mc_change_pct`, `volume_usd`, `mev_volume_pct` — each its own object keyed by `5m`/`15m`/`1h`/`2h`/`4h` — to match the actual API response. The 2.6.0 shape (`velocity[window].mc_change_pct`) was wrong; clients reading it would get `undefined`. Patch is type-only — no runtime breaking changes.
 >
 > **New in 2.6.0** *(2026-05-12)* — **Token directory + self-inspection.** `client.token.list({ min_liq, min_volume_1h_usd, max_mev_share_pct, mc_change_1h_min_pct, sort, ... })` — browse and filter every active mint, with default `min_liq=2000` to skip phantom-MC dust. `client.me()` — read your tier, daily/burst quota state, and per-feature usage in one call (no header parsing). Velocity / MEV-share fields added to every `TokenResponseBody`: `mc_change_pct`, `volume_usd`, `mev_volume_pct` (each keyed by `5m`/`15m`/`1h`/`2h`/`4h`) plus `history_age_seconds` on the parent. `/token/{mint}` 400s now ship `code`, `reason`, `received_length`, `example`, and `docs` URL — stop guessing why a mint failed. Deprecated `avg_entry_mc_usd` / `entry_mc_samples` removed from leaderboard types. All other 2.5.x APIs unchanged.
 
-> **Build Solana trading bots, analytics dashboards, KOL copy-trading tools, deployer sniper bots, and ecosystem browsers.**
+> **Build Solana trading bots, analytics dashboards, KOL copy-trading tools, deshred sniper bots, and ecosystem browsers.**
 
 ## Quick start (10 seconds)
 
@@ -32,13 +38,16 @@ const { trades } = await client.kol.feed({ limit: 5, action: "buy" });
 
 | Feature | Description |
 |---|---|
-| **KOL Tracker** | Real-time trade feed, PnL leaderboard with five time windows (today, 7d, 30d, 90d, 180d), coordination detection, per-wallet profiles, and deep PnL analytics for 1,000+ tracked KOL wallets. **180 days of trade history** retained. |
+| **KOL Tracker** | Real-time trade feed, PnL leaderboard with five time windows (today, 7d, 30d, 90d, 180d), coordination detection, per-wallet profiles, and deep PnL analytics for 1,069 tracked KOL wallets. **180 days of trade history** retained. |
+| **Deshred Sniper** | Deploy feed reconstructed from shred-level data — surfaces new pump.fun launches **~500ms before on-chain confirmation**. PRO: elite/good deployers. ULTRA: all tiers + custom watchlist. Use WebSocket/webhook for live push. |
 | **Alpha Wallet Intel** | Leaderboard of 1M+ scored early-buyer wallets, full wallet profiles, linked-wallet clustering, token cap-table enrichment, and 0–100 buyer quality scores. |
+| **Universal Wallet** | FIFO cost-basis PnL, open positions (hydrated with live prices), and raw trade history for **any** Solana wallet — not just curated KOLs. 90-day window, server-side cache. PRO+. |
+| **Price Alerts** | Token MC dip/recovery alerts delivered via WebSocket or HMAC-signed webhook. PRO: 5 rules, ULTRA: 25. |
 | **Wallet Tracker** | Monitor any Solana wallet for swaps and transfers. Track up to 10/50/100 wallets (Free/Pro/Ultra). Full wallets, counterparties, and tx_signatures on every tier. 120-day event retention. WS events on ULTRA. |
-| **Deployer Hunter** | Pump.fun deployer scoring, tier leaderboard, deploy alerts, and bonding intelligence |
-| **DEX Trade Stream** | Real-time WebSocket stream of ALL Solana DEX trades — filter by token, wallet, program, or trade size (Ultra) |
+| **Deployer Hunter** | 23,000+ pump.fun deployers scored by bonding rate — tier leaderboard, deploy alerts, deployer profiles, and best-tokens feed. |
+| **DEX Trade Stream** | Real-time WebSocket stream of ALL Solana DEX trades across 9+ programs — filter by token, wallet, DEX, deployer tier, or trade size. ULTRA. |
 | **Webhooks** | Push notifications for KOL trades, coordination signals, deployer alerts, and wallet tracker events (Pro/Ultra) |
-| **Tool Directory** | Search 950+ Solana tools and dApps indexed on MadeOnSol |
+| **Tool Directory** | Search 1,070+ Solana tools and dApps indexed on MadeOnSol |
 
 **Links:** [Full docs](https://madeonsol.com/solana-api) · [Website](https://madeonsol.com) · [API docs](https://madeonsol.com/api-docs)
 
@@ -73,11 +82,16 @@ const client = new MadeOnSol({ apiKey: "msk_your_api_key_here" });
 const { trades } = await client.kol.feed({ limit: 10, action: "buy" });
 console.log(trades[0].kol_name, "bought", trades[0].token_symbol);
 
-// Elite deployer leaderboard
-const { deployers } = await client.deployer.leaderboard({ tier: "elite" });
+// Deshred sniper — ~500ms before on-chain confirmation (PRO/ULTRA)
+const { deploys } = await client.sniper.recent({ limit: 20, min_bond_rate: 0.5 });
+console.log(deploys[0].token_name, "deployed by", deploys[0].deployer_tier, "tier deployer");
 
-// Recent deploy alerts
-const { alerts } = await client.deployer.alerts({ limit: 5 });
+// Multi-KOL coordination signal
+const { coordination } = await client.kol.coordination({ min_kols: 3, min_score: 70 });
+
+// FIFO PnL for any wallet (PRO+)
+const pnl = await client.wallet.pnl("ASVz...ybJk");
+console.log(`Realized: ${pnl.summary.realized_sol} SOL · Win rate: ${(pnl.summary.win_rate! * 100).toFixed(1)}%`);
 
 // Search Solana tools
 const { tools } = await client.tools.search({ q: "trading", limit: 10 });
@@ -88,11 +102,13 @@ const { tools } = await client.tools.search({ q: "trading", limit: 10 });
 ## Use cases
 
 - **Copy-trading bot** — stream KOL buys via `client.kol.feed()` and mirror trades
-- **DEX trade sniping** — subscribe to the all-DEX stream filtered by token or wallet
-- **Deployer sniper** — monitor `client.deployer.alerts()` for elite-tier launches
-- **Coordination detector** — flag tokens with `client.kol.coordination({ min_kols: 3 })`
+- **Deshred sniper** — `client.sniper.recent()` or subscribe to `sniper:deploys` WebSocket for ~500ms pre-confirm deploy signals
+- **DEX trade sniping** — subscribe to the all-DEX stream filtered by token, wallet, or deployer tier
+- **Coordination detector** — flag tokens with `client.kol.coordination({ min_kols: 3, min_score: 70 })`
 - **Scout signal** — track first-KOL-touch events filtered to S/A-tier scouts via `client.kol.firstTouches({ preset: "scout" })`
-- **Analytics dashboard** — combine leaderboard, PnL, and tool data
+- **Wallet analyser** — `client.wallet.pnl()` for FIFO cost-basis PnL on any Solana wallet
+- **Price alert bot** — `client.priceAlerts.create()` for MC dip/recovery alerts delivered via webhook
+- **Analytics dashboard** — combine leaderboard, PnL, token velocity, and tool data
 - **Telegram/Discord bot** — pipe alerts via webhooks into chat
 - **Portfolio tracker** — use `client.kol.wallet()` to follow specific KOL positions
 
