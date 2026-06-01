@@ -872,6 +872,20 @@ console.log(token.dex_ws_url);  // wss://madeonsol.com/ws/v1/dex-stream (Ultra o
 
 Returns: `StreamToken` — `{ token, expires_at, ws_url, dex_ws_url?, usage }`
 
+#### `client.stream.connect()` *(new in 2.10)*
+
+Open a **managed** stream — token fetch + 24h refresh, auto-reconnect (backoff + jitter), heartbeat liveness, and typed events are handled for you. No need to touch `getToken()` or `ws` directly.
+
+```ts
+const stream = client.stream.connect();
+stream.on("kol:trade", (t) => console.log(t.token_symbol, t.action));
+stream.on("deployer:alert", (a) => console.log("new deploy", a.token_mint));
+stream.subscribe(["kol:trades", "deployer:alerts"]);
+// stream.unsubscribe([...]) / stream.close() when done
+```
+
+Channels: `kol:trades`, `kol:coordination`, `kol:first_touches`, `deployer:alerts`, `wallet_tracker:events`, `copytrade:signals`, `price_alert:events`, `sniper:deploys`. Lifecycle: `open`, `close`, `reconnect`, `heartbeat`, `error`. Node 22+ uses the global `WebSocket`; on Node < 22 also `npm i ws`.
+
 ---
 
 ### DEX Firehose (Ultra) — `wss://madeonsol.com/ws/v1/dex-stream`
@@ -971,6 +985,27 @@ ws.send(JSON.stringify({ type: "unsubscribe", sub_id: "whales" }));
 Each `dex:trades` message echoes the `sub_id` that matched, so you can route them locally without reapplying filter logic client-side.
 
 ---
+
+### Copy-Trade — `client.copytrade` *(new in 2.10)*
+
+Mirror N source wallets into actionable signals (delivered via webhook/WebSocket). PRO/ULTRA — PRO: 3 rules × 5 wallets, ULTRA: 20 × 50.
+
+```ts
+const { subscription, webhook_secret } = await client.copytrade.create({
+  name: "whale mirror",
+  source_wallets: ["WalletA…", "WalletB…"],
+  sizing_mode: "fixed",
+  sizing_amount: 0.5,           // SOL per mirrored buy
+  only_action: "buy",
+  delivery_mode: "webhook",
+  webhook_url: "https://you.example/hook",
+});
+
+await client.copytrade.subscriptions();          // list rules
+await client.copytrade.update(subscription.id, { is_active: false });
+await client.copytrade.signals({ limit: 50 });   // 7-day fired-signal history
+await client.copytrade.delete(subscription.id);
+```
 
 ### Webhooks — `client.webhooks`
 

@@ -4,6 +4,18 @@
 // Zero dependencies — uses native fetch (Node ≥ 18).
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { MadeOnSolStream } from "./stream.js";
+import type { StreamClientOptions } from "./stream.js";
+
+export { MadeOnSolStream } from "./stream.js";
+export type {
+  StreamClientOptions,
+  StreamChannel,
+  StreamEventName,
+  StreamEvent,
+  StreamLifecycleEvent,
+} from "./stream.js";
+
 const BASE_URL = "https://madeonsol.com/api/v1";
 
 // ─── Error ───────────────────────────────────────────────────────────────────
@@ -2943,6 +2955,133 @@ class PriceAlertsClient {
   }
 }
 
+// ─── Copy-trade namespace ────────────────────────────────────────────────────
+
+export type CopyTradeAction = "buy" | "sell" | "both";
+export type CopyTradeSizingMode = "fixed" | "proportional" | "percent_source";
+export type CopyTradeDeliveryMode = "webhook" | "websocket" | "both";
+
+export interface CopyTradeSubscription {
+  id: number;
+  name: string | null;
+  source_wallets: string[];
+  min_trade_sol: number;
+  only_action: CopyTradeAction;
+  sizing_mode: CopyTradeSizingMode;
+  sizing_amount: number;
+  delivery_mode: CopyTradeDeliveryMode;
+  webhook_url: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface CopyTradeCreateParams {
+  name?: string;
+  source_wallets: string[];
+  min_trade_sol?: number;
+  only_action?: CopyTradeAction;
+  sizing_mode?: CopyTradeSizingMode;
+  sizing_amount: number;
+  delivery_mode?: CopyTradeDeliveryMode;
+  webhook_url?: string;
+}
+
+export interface CopyTradeUpdateParams {
+  name?: string | null;
+  source_wallets?: string[];
+  min_trade_sol?: number;
+  only_action?: CopyTradeAction;
+  sizing_mode?: CopyTradeSizingMode;
+  sizing_amount?: number;
+  delivery_mode?: CopyTradeDeliveryMode;
+  webhook_url?: string | null;
+  is_active?: boolean;
+}
+
+export interface CopyTradeCreateResponse {
+  subscription: CopyTradeSubscription;
+  /** Returned ONCE on creation when `webhook_url` is set — store it to verify HMAC signatures. */
+  webhook_secret: string | null;
+  note?: string;
+}
+
+export interface CopyTradeSignal {
+  id: number;
+  subscription_id: number;
+  fired_at: string;
+  source_wallet: string;
+  action: "buy" | "sell";
+  token_mint: string;
+  token_symbol: string | null;
+  token_name: string | null;
+  source_sol_amount: number;
+  suggested_sol_amount: number;
+  tx_signature: string;
+  delivered: boolean;
+  delivered_at: string | null;
+  /** Market cap (USD) stamped on the source trade when the rule fired. */
+  market_cap_usd_at_trade?: number | null;
+  /** Token price (USD) at the same moment. */
+  price_usd_at_trade?: number | null;
+  /** Current market cap (USD) — compare against at-trade for chase-vs-dip context. */
+  market_cap_usd?: number | null;
+  /** Current last-trade price (USD). */
+  last_price_usd?: number | null;
+}
+
+export interface CopyTradeSignalsParams {
+  subscription_id?: number;
+  /** ISO 8601 — only signals fired at-or-after this time. */
+  since?: string;
+  /** 1–500, default 50. */
+  limit?: number;
+}
+
+class CopyTradeClient {
+  constructor(
+    private readonly _get: <T>(url: string) => Promise<T>,
+    private readonly _post: <T>(url: string, body?: unknown) => Promise<T>,
+    private readonly _patch: <T>(url: string, body?: unknown) => Promise<T>,
+    private readonly _delete: <T>(url: string) => Promise<T>,
+    private readonly _baseUrl: string,
+  ) {}
+
+  /** List your copy-trade rules. Requires PRO or ULTRA. */
+  subscriptions(): Promise<{ subscriptions: CopyTradeSubscription[] }> {
+    return this._get(buildUrl(this._baseUrl, "/copytrade/subscriptions"));
+  }
+
+  /**
+   * Create a copy-trade rule (mirror N source wallets). Returns a one-time
+   * `webhook_secret` when `webhook_url` is set — save it. Tier quotas: PRO 3
+   * rules × 5 wallets, ULTRA 20 × 50.
+   */
+  create(params: CopyTradeCreateParams): Promise<CopyTradeCreateResponse> {
+    return this._post(buildUrl(this._baseUrl, "/copytrade/subscriptions"), params);
+  }
+
+  /** Fetch a single rule by id. */
+  get(id: number | string): Promise<{ subscription: CopyTradeSubscription }> {
+    return this._get(buildUrl(this._baseUrl, `/copytrade/subscriptions/${encodeURIComponent(id)}`));
+  }
+
+  /** Update any field on a rule. */
+  update(id: number | string, params: CopyTradeUpdateParams): Promise<{ subscription: CopyTradeSubscription }> {
+    return this._patch(buildUrl(this._baseUrl, `/copytrade/subscriptions/${encodeURIComponent(id)}`), params);
+  }
+
+  /** Delete a rule and its signal history. */
+  delete(id: number | string): Promise<{ deleted: boolean }> {
+    return this._delete(buildUrl(this._baseUrl, `/copytrade/subscriptions/${encodeURIComponent(id)}`));
+  }
+
+  /** Fired signal history (up to 7 days). Filter by subscription_id, since, limit. */
+  signals(params?: CopyTradeSignalsParams): Promise<{ signals: CopyTradeSignal[] }> {
+    return this._get(buildUrl(this._baseUrl, "/copytrade/signals", params as Record<string, string | number | undefined>));
+  }
+}
+
 // ─── Tools namespace ─────────────────────────────────────────────────────────
 
 class ToolsClient {
@@ -2969,6 +3108,19 @@ class StreamClient {
    */
   getToken(): Promise<StreamToken> {
     return this._post(buildUrl(this._baseUrl, "/stream/token"));
+  }
+
+  /**
+   * Open a managed real-time WebSocket stream. Handles token fetch + refresh,
+   * auto-reconnect with backoff, heartbeat liveness, and typed events for you.
+   *
+   * @example
+   * const stream = client.stream.connect();
+   * stream.on("kol:trade", (t) => console.log(t));
+   * stream.subscribe(["kol:trades", "deployer:alerts"]);
+   */
+  connect(opts?: Omit<StreamClientOptions, "getToken">): MadeOnSolStream {
+    return new MadeOnSolStream({ ...opts, getToken: () => this.getToken() });
   }
 }
 
@@ -3055,6 +3207,8 @@ export class MadeOnSol {
   readonly priceAlerts: PriceAlertsClient;
   /** Deshred pre-confirm pump.fun sniper feed + custom watchlist — PRO/ULTRA. */
   readonly sniper: SniperClient;
+  /** Copy-trade rules + fired signals — PRO/ULTRA. */
+  readonly copytrade: CopyTradeClient;
 
   private readonly _apiKey: string;
   private readonly _baseUrl: string;
@@ -3093,6 +3247,7 @@ export class MadeOnSol {
     this.firstTouchSubscriptions = new FirstTouchSubscriptionsClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
     this.priceAlerts = new PriceAlertsClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
     this.sniper = new SniperClient(boundGet, boundPost, boundDelete, this._baseUrl);
+    this.copytrade = new CopyTradeClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
   }
 
   private _headers(): Record<string, string> {
