@@ -892,7 +892,7 @@ Channels: `kol:trades`, `kol:coordination`, `kol:first_touches`, `deployer:alert
 
 Real-time trades across **9+ Solana DEX programs** (Pump.fun, PumpAMM, PumpSwap, Raydium AMM/CPMM/CAMM, Jupiter v6, Orca Whirlpool, Meteora DBC/DAMM, LaunchLab/bonk.fun) on a single normalized WebSocket. Server-side filters drop everything you don't care about before it hits your socket.
 
-**Limits:** ULTRA = 2 connections, **10 named subscriptions per connection**, up to **500 trades replay** from in-memory ring buffer. Inbound rate limit: 5 messages/sec (excess emits one error per second).
+**Limits:** ULTRA = 2 connections, **10 named subscriptions per connection**, up to **500 trades replay** from a server-side buffer holding ~5 minutes of firehose history (not connection-scoped — covers trades from before you connected; newest-first, sort by `block_time`). Inbound rate limit: 5 messages/sec (excess emits one error per second).
 
 #### Quick start
 
