@@ -10,7 +10,9 @@
 > ⭐ **[Star on GitHub](https://github.com/LamboPoewert/madeonsol-sdk)** if you find this useful · 📂 **[Examples](./examples/)** · 📚 **[API docs](https://madeonsol.com/api-docs)**
 
 Official TypeScript/JavaScript SDK for the **[MadeOnSol](https://madeonsol.com) Solana API** — zero dependencies, fully typed, works in Node.js ≥ 18 and edge runtimes.
-> Real-time Solana trading intelligence: track 1,069 KOL wallets with <3s latency, score 23,000+ Pump.fun deployers, surface deshred deploy signals **~500ms before on-chain confirmation**, detect multi-KOL coordination, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day at [madeonsol.com/pricing](https://madeonsol.com/pricing) — no credit card required.
+> Real-time Solana trading intelligence: track 1,069 KOL wallets with <3s latency, score 23,000+ Pump.fun deployers, surface deshred deploy signals **~500ms before on-chain confirmation**, detect multi-KOL coordination, push every pump.fun graduation the second it bonds, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day at [madeonsol.com/pricing](https://madeonsol.com/pricing) — no credit card required.
+
+> **New in 2.11** — **Graduation events + dump-cluster detection.** Subscribe `token:graduations` for every pump.fun bond in real time — tracked deployer or not — with typed `GraduationEvent` payloads (mint, deployer tier, time-to-bond, MC at bond). Buyer-quality `breakdown` adds `dump_cluster_count` (out-of-sample validated: 3+ such wallets in the first-20 → 94% dump vs 61% base) and `recycled_early_buyer_count` (high count with zero cluster leans runner). DEX firehose: replay buffer deepened to ~5 minutes; mint-scoped subs now receive in-band `dex:graduations` frames — the bond lands on the same connection as your position's trade flow.
 
 > **New in 2.9** — **Deshred Sniper Alerts.** `client.sniper.recent()` surfaces new pump.fun deploys reconstructed from shred-level data ~500ms before the chain confirms them — a measured head start over any confirmed-stream feed. PRO sees elite/good deployers; ULTRA sees every tier and maintains a custom deployer watchlist (`client.sniper.addToWatchlist()`). Use the `sniper:deploys` WebSocket channel or `sniper:deploy` webhook for live push instead of polling.
 >
@@ -40,12 +42,12 @@ const { trades } = await client.kol.feed({ limit: 5, action: "buy" });
 |---|---|
 | **KOL Tracker** | Real-time trade feed, PnL leaderboard with five time windows (today, 7d, 30d, 90d, 180d), coordination detection, per-wallet profiles, and deep PnL analytics for 1,069 tracked KOL wallets. **180 days of trade history** retained. |
 | **Deshred Sniper** | Deploy feed reconstructed from shred-level data — surfaces new pump.fun launches **~500ms before on-chain confirmation**. PRO: elite/good deployers. ULTRA: all tiers + custom watchlist. Use WebSocket/webhook for live push. |
-| **Alpha Wallet Intel** | Leaderboard of 1M+ scored early-buyer wallets, full wallet profiles, linked-wallet clustering, token cap-table enrichment, and 0–100 buyer quality scores. |
+| **Alpha Wallet Intel** | Leaderboard of 1M+ scored early-buyer wallets, full wallet profiles, linked-wallet clustering, token cap-table enrichment, and 0–100 buyer quality scores with dump-cluster wallet detection. |
 | **Universal Wallet** | FIFO cost-basis PnL, open positions (hydrated with live prices), and raw trade history for **any** Solana wallet — not just curated KOLs. 90-day window, server-side cache. PRO+. |
 | **Price Alerts** | Token MC dip/recovery alerts delivered via WebSocket or HMAC-signed webhook. PRO: 5 rules, ULTRA: 25. |
 | **Wallet Tracker** | Monitor any Solana wallet for swaps and transfers. Track up to 10/50/100 wallets (Free/Pro/Ultra). Full wallets, counterparties, and tx_signatures on every tier. 120-day event retention. WS events on ULTRA. |
 | **Deployer Hunter** | 23,000+ pump.fun deployers scored by bonding rate — tier leaderboard, deploy alerts, deployer profiles, and best-tokens feed. |
-| **DEX Trade Stream** | Real-time WebSocket stream of ALL Solana DEX trades across 9+ programs — filter by token, wallet, DEX, deployer tier, or trade size. ULTRA. |
+| **DEX Trade Stream** | Real-time WebSocket stream of ALL Solana DEX trades across 9+ programs — filter by token, wallet, DEX, deployer tier, or trade size. ~5 min replay + in-band graduation frames on mint-scoped subs. ULTRA. |
 | **Webhooks** | Push notifications for KOL trades, coordination signals, deployer alerts, and wallet tracker events (Pro/Ultra) |
 | **Tool Directory** | Search 1,070+ Solana tools and dApps indexed on MadeOnSol |
 
@@ -104,6 +106,7 @@ const { tools } = await client.tools.search({ q: "trading", limit: 10 });
 - **Copy-trading bot** — stream KOL buys via `client.kol.feed()` and mirror trades
 - **Deshred sniper** — `client.sniper.recent()` or subscribe to `sniper:deploys` WebSocket for ~500ms pre-confirm deploy signals
 - **DEX trade sniping** — subscribe to the all-DEX stream filtered by token, wallet, or deployer tier
+- **Graduation sniper / position manager** — subscribe `token:graduations` for every pump.fun bond in real time, or hold a mint-scoped firehose sub and get the bond in-band with your position's trade flow
 - **Coordination detector** — flag tokens with `client.kol.coordination({ min_kols: 3, min_score: 70 })`
 - **Scout signal** — track first-KOL-touch events filtered to S/A-tier scouts via `client.kol.firstTouches({ preset: "scout" })`
 - **Wallet analyser** — `client.wallet.pnl()` for FIFO cost-basis PnL on any Solana wallet
@@ -884,7 +887,7 @@ stream.subscribe(["kol:trades", "deployer:alerts"]);
 // stream.unsubscribe([...]) / stream.close() when done
 ```
 
-Channels: `kol:trades`, `kol:coordination`, `kol:first_touches`, `deployer:alerts`, `wallet_tracker:events`, `copytrade:signals`, `price_alert:events`, `sniper:deploys`. Lifecycle: `open`, `close`, `reconnect`, `heartbeat`, `error`. Node 22+ uses the global `WebSocket`; on Node < 22 also `npm i ws`.
+Channels: `kol:trades`, `kol:coordination`, `kol:first_touches`, `deployer:alerts`, `wallet_tracker:events`, `copytrade:signals`, `price_alert:events`, `sniper:deploys`, `token:graduations` (every pump.fun graduation in real time, tracked deployer or not — typed `GraduationEvent`). Lifecycle: `open`, `close`, `reconnect`, `heartbeat`, `error`. Node 22+ uses the global `WebSocket`; on Node < 22 also `npm i ws`.
 
 ---
 

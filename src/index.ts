@@ -1452,6 +1452,20 @@ export interface AlphaBuyerQualityBreakdown {
   bundle_buyer_count: number;
   avg_historical_win_rate: number | null;
   bot_dominated: boolean;
+  /**
+   * First-20 buyers on the rolling dump-cluster list (wallets whose 5+
+   * recent first-20 appearances are exclusively on tokens that peaked
+   * <15 min after deploy; trailing 42d, refreshed daily). Out-of-sample:
+   * 3+ such wallets predicted a sub-15-min peak 94% of the time vs 61%
+   * base. Informational — does not move the score.
+   */
+  dump_cluster_count: number;
+  /**
+   * First-20 buyers with 5+ recent first-20 appearances of any kind.
+   * Alone it predicts nothing; a heavily recycled cohort with
+   * dump_cluster_count 0 historically leans runner.
+   */
+  recycled_early_buyer_count: number;
 }
 
 export interface AlphaBuyerQualityResponse {
@@ -1460,9 +1474,23 @@ export interface AlphaBuyerQualityResponse {
   confidence: "low" | "medium" | "high";
   signal: "positive" | "neutral" | "negative";
   cached_at: string;
-  /** PRO/ULTRA only */
+  /** Returned on all tiers. */
   breakdown?: AlphaBuyerQualityBreakdown;
   note?: string;
+}
+
+/** Payload of a `token:graduation` stream event — every pump.fun graduation
+ * (bonding curve complete → PumpSwap migration), tracked deployer or not. */
+export interface GraduationEvent {
+  token_mint: string;
+  token_name: string | null;
+  token_symbol: string | null;
+  time_to_bond_minutes: number | null;
+  deployer_wallet: string | null;
+  /** 'unranked' when the deployer is unknown to deployer-hunter. */
+  deployer_tier: string;
+  market_cap_usd: number | null;
+  bonded_at: string;
 }
 
 export interface AlphaBuyerQualityBatchResponse {
