@@ -2703,7 +2703,7 @@ export interface SniperWatchlistRemoveResponse {
 /**
  * Deshred pre-confirm pump.fun sniper feed. PRO + ULTRA.
  * Live alerts flow via webhook (`sniper:deploy`), the `sniper:deploys` WebSocket
- * channel, or Telegram (`/alert sniper`); these methods are for catch-up,
+ * channel; these methods are for catch-up,
  * backtesting, and managing the ULTRA custom watchlist.
  */
 class SniperClient {

@@ -272,7 +272,7 @@ const { deploys: tracked } = await client.sniper.recent({ watchlist: true });
 await client.sniper.removeFromWatchlist("7dEx...4pQ8");
 ```
 
-Detection is pre-execution, so payloads carry no MC/logs/balances — `confirmed_on_chain` is `"deshred"`. For **live** push (not polling), use the `sniper:deploy` webhook event, the `sniper:deploys` WebSocket channel, or `/alert sniper` in the Telegram bot. ~1–3% of detected deploys may abandon before settlement.
+Detection is pre-execution, so payloads carry no MC/logs/balances — `confirmed_on_chain` is `"deshred"`. For **live** push (not polling), use the `sniper:deploy` webhook event or the `sniper:deploys` WebSocket channel. ~1–3% of detected deploys may abandon before settlement.
 
 ---
 
