@@ -1103,6 +1103,11 @@ export interface DeployerSummary {
   total_tokens_deployed?: number | null;
   /** Peak market cap (USD) of this deployer's best token to date. Populated on alert rows. */
   best_token_peak_mc?: number | null;
+  /** Fraction of the deployer's labeled tokens that ran (peak >=60min after deploy) vs dumped. */
+  runner_rate?: number | null;
+  /** Confidence denominator; gate on >=3. */
+  labeled_tokens?: number | null;
+  avg_time_to_bond_minutes?: number | null;
 }
 
 export interface DeployerLeaderboardEntry {
@@ -1116,6 +1121,10 @@ export interface DeployerLeaderboardEntry {
   last_deploy_at?: string | null;
   recent_outcomes?: string | null;
   avg_time_to_bond_minutes?: number | null;
+  /** Fraction of the deployer's labeled tokens that ran (peak >=60min after deploy) vs dumped. */
+  runner_rate?: number | null;
+  /** Confidence denominator; gate on >=3. */
+  labeled_tokens?: number | null;
   best_token_peak_mc?: number | null;
   avg_peak_mc?: number | null;
   last_bond_at?: string | null;
@@ -1152,6 +1161,11 @@ export interface DeployerProfile {
   total_bonded: number;
   last_deploy_at: string | null;
   first_seen: string | null;
+  /** Fraction of the deployer's labeled tokens that ran (peak >=60min after deploy) vs dumped. */
+  runner_rate?: number | null;
+  /** Confidence denominator; gate on >=3. */
+  labeled_tokens?: number | null;
+  avg_time_to_bond_minutes?: number | null;
   tokens?: DeployerToken[] | null;
 }
 
@@ -2636,6 +2650,10 @@ export interface SniperDeploy {
   deployer_bond_rate: number | null;
   deployer_total_bonded: number | null;
   deployer_recent: string | null;
+  /** Fraction of the deployer's labeled tokens that ran (peak >=60min after deploy) vs dumped. */
+  deployer_runner_rate?: number | null;
+  /** Confidence denominator; gate on >=3. */
+  deployer_labeled_tokens?: number | null;
   /** "deshred" — detection is pre-execution, so the payload carries no MC/logs/balances. */
   confirmed_on_chain: boolean | null;
   confirmed_at: string | null;
