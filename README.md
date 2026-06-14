@@ -12,6 +12,8 @@
 Official TypeScript/JavaScript SDK for the **[MadeOnSol](https://madeonsol.com) Solana API** — zero dependencies, fully typed, works in Node.js ≥ 18 and edge runtimes.
 > Real-time Solana trading intelligence: track 1,069 KOL wallets with <3s latency, score 23,000+ Pump.fun deployers, surface deshred deploy signals **~500ms before on-chain confirmation**, detect multi-KOL coordination, push every pump.fun graduation the second it bonds, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day at [madeonsol.com/pricing](https://madeonsol.com/pricing) — no credit card required.
 
+> **New in 2.12.0** — **Launch cohort, liquidity/MC ratio, deployer tier filter, KOL hold stats, and signal performance.** `TokenResponseBody` (single + batch) gains `liquidity_to_mc_ratio`, `launch_cohort_sol`, and `launch_cohort_size`. `client.token.list()` adds `min_liq_mc_ratio`, `max_liq_mc_ratio`, and `deployer_tier` filter params; list items gain `liquidity_to_mc_ratio` and `deployer_tier`. `KolLeaderboardEntry` gains `median_hold_minutes_30d` and `percentile_early_entry_30d`. New top-level method `client.getSignalPerformance(name)` calls `GET /signals/{name}/performance`.
+>
 > **New in 2.11.1** — **Deployer runner-rate fields.** Sniper deploys, deployer alerts/profiles, and leaderboard rows now carry `runner_rate` (fraction of the deployer's labeled tokens that ran — peak ≥60min after deploy — vs dumped) and `labeled_tokens` (confidence denominator; gate on ≥3).
 >
 > **New in 2.11** — **Graduation events + dump-cluster detection.** Subscribe `token:graduations` for every pump.fun bond in real time — tracked deployer or not — with typed `GraduationEvent` payloads (mint, deployer tier, time-to-bond, MC at bond). Buyer-quality `breakdown` adds `dump_cluster_count` (out-of-sample validated: 3+ such wallets in the first-20 → 94% dump vs 61% base) and `recycled_early_buyer_count` (high count with zero cluster leans runner). DEX firehose: replay buffer deepened to ~5 minutes; mint-scoped subs now receive in-band `dex:graduations` frames — the bond lands on the same connection as your position's trade flow.
@@ -152,6 +154,8 @@ const { leaderboard, period } = await client.kol.leaderboard({
 ```
 
 > **180-day retention** — KOL trade data is retained for 180 days (extended from 31 on 2026-04-07). The 90d and 180d windows fill up over time as the trade table accumulates.
+
+Each `KolLeaderboardEntry` includes `median_hold_minutes_30d` (median position hold duration in minutes over the last 30 days) and `percentile_early_entry_30d` (early-entry percentile rank 0–100 over the last 30 days).
 
 Returns: `KolLeaderboardResponse`
 
@@ -776,11 +780,11 @@ console.log(token.mev_volume_pct?.["1h"]);  // v1.7
 
 Invalid mints return a 400 with `code: "invalid_mint"`, `reason`, `received_length`, `example`, and `docs` URL — no trial and error.
 
-Returns: `TokenResponse` (with `mc_change_pct` / `volume_usd` / `mev_volume_pct` (each keyed by 5m/15m/1h/2h/4h) + `history_age_seconds` as of 1.7)
+Returns: `TokenResponse` (with `mc_change_pct` / `volume_usd` / `mev_volume_pct` (each keyed by 5m/15m/1h/2h/4h) + `history_age_seconds` as of 1.7). **New in 2.12:** also returns `liquidity_to_mc_ratio` (liquidity_usd / market_cap), `launch_cohort_sol` (total SOL spent by the first-20 buyers), and `launch_cohort_size` (count of first-20 buyers, 0–20).
 
 #### `client.token.batch(mints)`
 
-Batch lookup up to 50 mints in one round-trip. ~10–20× cheaper than N sequential calls.
+Batch lookup up to 50 mints in one round-trip. ~10–20× cheaper than N sequential calls. Each item returns the same shape as `get()` — including `liquidity_to_mc_ratio`, `launch_cohort_sol`, and `launch_cohort_size` *(new in 2.12)*.
 
 ```ts
 const { tokens } = await client.token.batch(["mint1", "mint2", "mint3"]);
@@ -792,9 +796,11 @@ Returns: `TokenBatchResponse`
 
 Filtered, sortable token directory. Default `min_liq=2000` trims the long tail of phantom-MC tokens from low-liquidity pools; pass `min_liq=0` to opt out.
 
-**Server-side filters** (cheap, indexed): `min_mc`, `max_mc`, `min_liq`, `active_h`, `primary_dex` (`pumpfun`/`pumpswap`/`raydium`/`meteora`/`orca`/`raydium_clmm`), `authority_revoked`, `exclude_token2022`, `min_lp_burnt_pct`.
+**Server-side filters** (cheap, indexed): `min_mc`, `max_mc`, `min_liq`, `active_h`, `primary_dex` (`pumpfun`/`pumpswap`/`raydium`/`meteora`/`orca`/`raydium_clmm`), `authority_revoked`, `exclude_token2022`, `min_lp_burnt_pct`, `deployer_tier` (`elite`/`good`/`moderate`/`rising`/`cold`/`unranked`), `min_liq_mc_ratio`, `max_liq_mc_ratio`.
 
 **Computed post-filters** (over-fetches 3×): `min_volume_1h_usd`, `max_mev_share_pct`, `mc_change_1h_min_pct`, `mc_change_1h_max_pct`. When any of these are set, `pagination.post_filtered` is `true` and page size may be smaller than `limit`.
+
+Each item in `tokens[]` includes `liquidity_to_mc_ratio` and `deployer_tier` *(new in 2.12)*.
 
 ```ts
 // Momentum scanner: liquid mints up >20% in 1h, low bot share
@@ -842,6 +848,21 @@ if (me.quota.daily.remaining < 100) {
 ```
 
 Returns: `MeResponse`
+
+---
+
+### Signal Performance — `client.getSignalPerformance(name)` *(new in 2.12)*
+
+Performance stats for a named signal: hit rate, precision, sample count, and lookback window.
+
+```ts
+const perf = await client.getSignalPerformance("kol_coordination");
+console.log(perf.precision, perf.hit_rate);
+```
+
+Params: `name` — signal name (e.g. `"kol_coordination"`, `"first_touch_scout"`, `"deployer_elite"`).
+
+Returns: `Promise<unknown>` — shape varies by signal name; see `/api-docs` for the full schema.
 
 ---
 

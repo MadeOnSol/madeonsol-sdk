@@ -187,6 +187,10 @@ export interface KolLeaderboardEntry {
   percentile_winrate_7d?: number | null;
   percentile_pnl_30d?: number | null;
   percentile_winrate_30d?: number | null;
+  /** Median position hold duration in minutes over the last 30 days. */
+  median_hold_minutes_30d?: number | null;
+  /** Percentile rank for early entry (0–100) over the last 30 days. */
+  percentile_early_entry_30d?: number | null;
 }
 
 export interface KolLeaderboardResponse {
@@ -1858,6 +1862,12 @@ export interface TokenResponseBody {
   mev_volume_pct?: VelocityNumberMap;
   /** v1.7 — seconds of velocity history available for this token (capped at ~4h05m). */
   history_age_seconds?: number | null;
+  /** Ratio of liquidity_usd to market_cap — a proxy for pool depth relative to token size. */
+  liquidity_to_mc_ratio?: number | null;
+  /** Total SOL spent by the first-20 buyers at launch. */
+  launch_cohort_sol?: number | null;
+  /** Count of distinct first-20 buyers (0–20). */
+  launch_cohort_size?: number;
 }
 
 export interface TokenResponse {
@@ -1911,6 +1921,12 @@ export interface TokenListParams {
   sort?: TokenListSort;
   limit?: number;
   offset?: number;
+  /** Filter by minimum liquidity_to_mc_ratio. */
+  min_liq_mc_ratio?: number;
+  /** Filter by maximum liquidity_to_mc_ratio. */
+  max_liq_mc_ratio?: number;
+  /** Filter by deployer tier. */
+  deployer_tier?: "elite" | "good" | "moderate" | "rising" | "cold" | "unranked";
 }
 
 export interface TokenSummary {
@@ -1930,6 +1946,10 @@ export interface TokenSummary {
   mc_change_1h_pct: number | null;
   organic_volume_1h_usd: number | null;
   mev_share_pct: number | null;
+  /** Ratio of liquidity_usd to market_cap_usd — a proxy for pool depth. */
+  liquidity_to_mc_ratio?: number | null;
+  /** Deployer Hunter tier for this token's deployer wallet. */
+  deployer_tier?: string | null;
 }
 
 export interface TokenListResponse {
@@ -3297,7 +3317,7 @@ export class MadeOnSol {
   }
 
   private _headers(): Record<string, string> {
-    return { Authorization: `Bearer ${this._apiKey}`, Accept: "application/json", "User-Agent": "madeonsol-sdk/2.9.0" };
+    return { Authorization: `Bearer ${this._apiKey}`, Accept: "application/json", "User-Agent": "madeonsol-sdk/2.12.0" };
   }
 
   /**
@@ -3317,6 +3337,21 @@ export class MadeOnSol {
    */
   me(): Promise<MeResponse> {
     return this._request(buildUrl(this._baseUrl, "/me"));
+  }
+
+  /**
+   * Performance stats for a named signal — hit rate, precision, sample count,
+   * and lookback window. Available on all tiers.
+   *
+   * @param name Signal name (e.g. "kol_coordination", "first_touch_scout", "deployer_elite").
+   * @example
+   * ```ts
+   * const perf = await client.getSignalPerformance("kol_coordination");
+   * console.log(perf.precision, perf.hit_rate);
+   * ```
+   */
+  getSignalPerformance(name: string): Promise<unknown> {
+    return this._request(buildUrl(this._baseUrl, `/signals/${encodeURIComponent(name)}/performance`));
   }
 
   private async _request<T>(url: string): Promise<T> {
