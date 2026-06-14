@@ -32,7 +32,7 @@ const client = new MadeOnSol({ apiKey: "msk_your_api_key_here" });
 
 ### KOL Tracker (client.kol)
 - `client.kol.feed(params?)` - Live KOL trade feed (buy/sell, filter by wallet)
-- `client.kol.leaderboard(params?)` - PnL leaderboard (today, 7d, 30d, 90d, 180d)
+- `client.kol.leaderboard(params?)` - PnL leaderboard (today, 7d, 30d, 90d, 180d). Per-entry: `median_hold_minutes_30d`, `percentile_early_entry_30d`.
 - `client.kol.wallet(wallet, params?)` - Single KOL wallet profile + PnL breakdown
 - `client.kol.coordination(params?)` - Detect coordinated KOL buying (pump signals)
 - `client.kol.token(mint)` - KOL activity for a specific token
@@ -53,13 +53,16 @@ const client = new MadeOnSol({ apiKey: "msk_your_api_key_here" });
 - `client.deployer.recentBonds(params?)` - Recently bonded tokens
 
 ### Token Intelligence (client.token)
-- `client.token.get(mint)` - Per-mint snapshot: price, MC, volume, deployer rep, KOL activity, blacklist flags, velocity windows (5m/15m/1h/2h/4h with mc_change_pct + volume_usd + mev_volume_pct), is_blacklisted, history_age_seconds. Invalid mints return structured 400 with code/reason/example/docs.
-- `client.token.batch(mints)` - Batch lookup up to 50 mints (same shape as get(), 10-20x cheaper)
-- `client.token.list(params?)` - **v1.7 / PRO+** filtered token directory. Server-side filters: min_mc, max_mc, min_liq (default 2000), active_h, primary_dex, authority_revoked, exclude_token2022, min_lp_burnt_pct. Computed post-filters (over-fetches 3x): min_volume_1h_usd, max_mev_share_pct, mc_change_1h_min_pct, mc_change_1h_max_pct. Sort: mc_desc/mc_asc/last_trade_desc/liquidity_desc/cumulative_volume_desc. Returns tokens[] with mev_share_pct + organic_volume_1h_usd + mc_change_1h_pct.
+- `client.token.get(mint)` - Per-mint snapshot: price, MC, volume, deployer rep, KOL activity, blacklist flags, velocity windows (5m/15m/1h/2h/4h with mc_change_pct + volume_usd + mev_volume_pct), is_blacklisted, history_age_seconds, `liquidity_to_mc_ratio` (liquidity_usd ÷ market_cap depth gauge), `launch_cohort_sol` (total SOL from first-20 buyers), `launch_cohort_size` (0–20). Invalid mints return structured 400 with code/reason/example/docs.
+- `client.token.batch(mints)` - Batch lookup up to 50 mints (same shape as get(), 10-20x cheaper). Includes `liquidity_to_mc_ratio`, `launch_cohort_sol`, `launch_cohort_size`.
+- `client.token.list(params?)` - **v1.7 / PRO+** filtered token directory. Server-side filters: min_mc, max_mc, min_liq (default 2000), active_h, primary_dex, authority_revoked, exclude_token2022, min_lp_burnt_pct. Computed post-filters (over-fetches 3x): min_volume_1h_usd, max_mev_share_pct, mc_change_1h_min_pct, mc_change_1h_max_pct, `min_liq_mc_ratio`, `max_liq_mc_ratio`, `deployer_tier` (elite|good|moderate|rising|cold|unranked). Sort: mc_desc/mc_asc/last_trade_desc/liquidity_desc/cumulative_volume_desc. Returns tokens[] with mev_share_pct + organic_volume_1h_usd + mc_change_1h_pct + `liquidity_to_mc_ratio` + `deployer_tier`.
 - `client.token.batchBuyerQuality(mints)` - Batch buyer-quality scoring (shares LRU cache with alpha.buyerQuality)
 
 ### Account (client.me) — all tiers
 - `client.me()` - **v1.7** Self-inspect quota and feature usage. Returns tier, subscription block (status, billing_cycle, current_period_end), quota.daily (limit/used/remaining/resets_at), quota.burst (limit/used/remaining/window_seconds), and features (webhooks, copytrade_wallets, copytrade_rules, coordination_rules, first_touch_subscriptions, ws_connections, dex_connections, wallet_tracker_watchlist). Use for self-throttling without parsing rate-limit headers.
+
+### Signal Performance
+- `client.getSignalPerformance(name)` - Signal performance stats for a named signal (e.g. `'dump_cluster_count'`, `'runner_rate'`): hit rate by bucket, lift over base, sample size, confidence window. Use to weight signals programmatically.
 
 ### Tool Directory (client.tools)
 - `client.tools.search(params?)` - Search 950+ Solana tools (full-text + category filter)
