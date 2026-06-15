@@ -1497,6 +1497,55 @@ export interface AlphaBuyerQualityResponse {
   note?: string;
 }
 
+// ─── Token risk score (v2.13) ──────────────────────────────────────────────
+
+export type TokenRiskBand = "safe" | "caution" | "danger";
+export type TokenRiskStatus = "ok" | "warn" | "danger";
+
+export interface TokenRiskFactor {
+  /** Stable machine key (e.g. "mint_authority", "liquidity"). */
+  key: string;
+  /** Human-readable label for the factor. */
+  label: string;
+  /** Per-factor verdict. */
+  status: TokenRiskStatus;
+  /** Risk points this factor contributed to `risk_score`. */
+  points: number;
+  /** One-line explanation of the assessment. */
+  detail: string;
+}
+
+export interface TokenRiskInputs {
+  mint_authority_revoked: boolean | null;
+  freeze_authority_revoked: boolean | null;
+  liquidity_usd: number | null;
+  liquidity_to_mc_ratio: number | null;
+  transfer_fee_bps: number | null;
+  is_token_2022: boolean | null;
+  burn_detected: boolean | null;
+  launch_cohort_sol: number | null;
+  launch_cohort_size: number | null;
+  deployer_bonding_rate: number | null;
+  deployer_total_deployed: number | null;
+  kol_signal: string | null;
+  is_blacklisted: boolean | null;
+  [key: string]: unknown;
+}
+
+/** Transparent 0–100 token rug-risk/safety score (higher = riskier). PRO/ULTRA only. */
+export interface TokenRiskResponse {
+  mint: string;
+  /** 0–100, higher = riskier. */
+  risk_score: number;
+  band: TokenRiskBand;
+  /** Explainable per-factor breakdown that sums into `risk_score`. */
+  factors: TokenRiskFactor[];
+  /** Raw signals the score was computed from. */
+  inputs: TokenRiskInputs;
+  score_version: string;
+  as_of: string;
+}
+
 /** Payload of a `token:graduation` stream event — every pump.fun graduation
  * (bonding curve complete → PumpSwap migration), tracked deployer or not. */
 export interface GraduationEvent {
@@ -2419,6 +2468,18 @@ class AlphaClient {
   buyerQuality(mint: string): Promise<AlphaBuyerQualityResponse> {
     return this._fetch(buildUrl(this._baseUrl, `/tokens/${encodeURIComponent(mint)}/buyer-quality`));
   }
+
+  /**
+   * v2.13 — Transparent 0–100 token rug-risk/safety score (higher = riskier).
+   * Returns a `band` (safe/caution/danger), an explainable `factors` array that
+   * sums into the score, and the raw `inputs` (mint/freeze authority, liquidity,
+   * transfer fee, Token-2022 flag, burn, launch cohort, deployer bond rate, KOL
+   * signal, blacklist). **PRO/ULTRA only** — BASIC receives HTTP 403.
+   * @param mint Token mint address.
+   */
+  risk(mint: string): Promise<TokenRiskResponse> {
+    return this._fetch(buildUrl(this._baseUrl, `/tokens/${encodeURIComponent(mint)}/risk`));
+  }
 }
 
 // ─── Token namespace (/token/{mint}) ─────────────────────────────────────────
@@ -3317,7 +3378,7 @@ export class MadeOnSol {
   }
 
   private _headers(): Record<string, string> {
-    return { Authorization: `Bearer ${this._apiKey}`, Accept: "application/json", "User-Agent": "madeonsol-sdk/2.12.0" };
+    return { Authorization: `Bearer ${this._apiKey}`, Accept: "application/json", "User-Agent": "madeonsol-sdk/2.13.0" };
   }
 
   /**

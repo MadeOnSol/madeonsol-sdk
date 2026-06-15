@@ -10,8 +10,10 @@
 > ⭐ **[Star on GitHub](https://github.com/LamboPoewert/madeonsol-sdk)** if you find this useful · 📂 **[Examples](./examples/)** · 📚 **[API docs](https://madeonsol.com/api-docs)**
 
 Official TypeScript/JavaScript SDK for the **[MadeOnSol](https://madeonsol.com) Solana API** — zero dependencies, fully typed, works in Node.js ≥ 18 and edge runtimes.
-> Real-time Solana trading intelligence: track 1,069 KOL wallets with <3s latency, score 23,000+ Pump.fun deployers, surface deshred deploy signals **~500ms before on-chain confirmation**, detect multi-KOL coordination, push every pump.fun graduation the second it bonds, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day at [madeonsol.com/pricing](https://madeonsol.com/pricing) — no credit card required.
+> Real-time Solana trading intelligence: track 1,069 KOL wallets with <3s latency, score 23,000+ Pump.fun deployers, surface deshred deploy signals **~500ms before on-chain confirmation**, detect multi-KOL coordination, score token rug-risk 0–100 with a transparent factor breakdown, push every pump.fun graduation the second it bonds, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day at [madeonsol.com/pricing](https://madeonsol.com/pricing) — no credit card required.
 
+> **New in 2.13.0** — **Token risk score.** `client.alpha.risk(mint)` returns a transparent 0–100 rug-risk/safety score (higher = riskier) for any token: a `band` (`safe`/`caution`/`danger`), an explainable `factors[]` array (each with `key`, `label`, `status`, `points`, `detail`) that sums into the score, and the raw `inputs` it was computed from — mint/freeze authority revocation, liquidity USD + liquidity-to-MC ratio, transfer fee bps, Token-2022 flag, burn detection, launch cohort (SOL + size), deployer bond rate + total deployed, KOL signal, and blacklist status. Plus `score_version` and `as_of`. **PRO/ULTRA only.** New types: `TokenRiskResponse`, `TokenRiskFactor`, `TokenRiskInputs`, `TokenRiskBand`, `TokenRiskStatus`.
+>
 > **New in 2.12.0** — **Launch cohort, liquidity/MC ratio, deployer tier filter, KOL hold stats, and signal performance.** `TokenResponseBody` (single + batch) gains `liquidity_to_mc_ratio`, `launch_cohort_sol`, and `launch_cohort_size`. `client.token.list()` adds `min_liq_mc_ratio`, `max_liq_mc_ratio`, and `deployer_tier` filter params; list items gain `liquidity_to_mc_ratio` and `deployer_tier`. `KolLeaderboardEntry` gains `median_hold_minutes_30d` and `percentile_early_entry_30d`. New top-level method `client.getSignalPerformance(name)` calls `GET /signals/{name}/performance`.
 >
 > **New in 2.11.1** — **Deployer runner-rate fields.** Sniper deploys, deployer alerts/profiles, and leaderboard rows now carry `runner_rate` (fraction of the deployer's labeled tokens that ran — peak ≥60min after deploy — vs dumped) and `labeled_tokens` (confidence denominator; gate on ≥3).
@@ -47,6 +49,7 @@ const { trades } = await client.kol.feed({ limit: 5, action: "buy" });
 | **KOL Tracker** | Real-time trade feed, PnL leaderboard with five time windows (today, 7d, 30d, 90d, 180d), coordination detection, per-wallet profiles, and deep PnL analytics for 1,069 tracked KOL wallets. **180 days of trade history** retained. |
 | **Deshred Sniper** | Deploy feed reconstructed from shred-level data — surfaces new pump.fun launches **~500ms before on-chain confirmation**. PRO: elite/good deployers. ULTRA: all tiers + custom watchlist. Use WebSocket/webhook for live push. |
 | **Alpha Wallet Intel** | Leaderboard of 1M+ scored early-buyer wallets, full wallet profiles, linked-wallet clustering, token cap-table enrichment, and 0–100 buyer quality scores with dump-cluster wallet detection. |
+| **Token Risk Score** | Transparent 0–100 rug-risk/safety score per token with a `safe`/`caution`/`danger` band, explainable factor breakdown, and the raw inputs (authorities, liquidity, transfer fee, launch cohort, deployer bond rate, KOL signal, blacklist). PRO/ULTRA. |
 | **Universal Wallet** | FIFO cost-basis PnL, open positions (hydrated with live prices), and raw trade history for **any** Solana wallet — not just curated KOLs. 90-day window, server-side cache. PRO+. |
 | **Price Alerts** | Token MC dip/recovery alerts delivered via WebSocket or HMAC-signed webhook. PRO: 5 rules, ULTRA: 25. |
 | **Wallet Tracker** | Monitor any Solana wallet for swaps and transfers. Track up to 10/50/100 wallets (Free/Pro/Ultra). Full wallets, counterparties, and tx_signatures on every tier. 120-day event retention. WS events on ULTRA. |
@@ -113,6 +116,7 @@ const { tools } = await client.tools.search({ q: "trading", limit: 10 });
 - **Graduation sniper / position manager** — subscribe `token:graduations` for every pump.fun bond in real time, or hold a mint-scoped firehose sub and get the bond in-band with your position's trade flow
 - **Coordination detector** — flag tokens with `client.kol.coordination({ min_kols: 3, min_score: 70 })`
 - **Scout signal** — track first-KOL-touch events filtered to S/A-tier scouts via `client.kol.firstTouches({ preset: "scout" })`
+- **Rug-risk gate** — score a token with `client.alpha.risk(mint)` and skip anything in the `danger` band before buying
 - **Wallet analyser** — `client.wallet.pnl()` for FIFO cost-basis PnL on any Solana wallet
 - **Price alert bot** — `client.priceAlerts.create()` for MC dip/recovery alerts delivered via webhook
 - **Analytics dashboard** — combine leaderboard, PnL, token velocity, and tool data
@@ -481,6 +485,19 @@ const { score } = await client.alpha.buyerQuality("EPjFW...");
 ```
 
 Returns: `AlphaBuyerQualityResponse`
+
+---
+
+#### `client.alpha.risk(mint)`
+
+Transparent 0–100 token rug-risk/safety score (higher = riskier). Returns a `band` (`safe`/`caution`/`danger`), an explainable `factors[]` array that sums into `risk_score`, and the raw `inputs` (mint/freeze authority revocation, liquidity USD + liquidity-to-MC ratio, transfer fee bps, Token-2022 flag, burn detection, launch cohort SOL + size, deployer bond rate + total deployed, KOL signal, blacklist status). PRO/ULTRA — BASIC receives HTTP 403.
+
+```ts
+const { risk_score, band, factors } = await client.alpha.risk("EPjFW...");
+if (band === "danger") return; // skip risky tokens
+```
+
+Returns: `TokenRiskResponse`
 
 ---
 
