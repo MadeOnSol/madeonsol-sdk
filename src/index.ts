@@ -1546,6 +1546,59 @@ export interface TokenRiskResponse {
   as_of: string;
 }
 
+export type CandleTimeframe = "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
+
+export interface CandlesParams {
+  /** Bar size. Default "1h". */
+  tf?: CandleTimeframe;
+  /** Most-recent N bars, 1–1000. Default 200. */
+  limit?: number;
+  /** ISO8601 window start. Defaults to limit×tf before `to`. */
+  from?: string;
+  /** ISO8601 window end. Defaults to now. */
+  to?: string;
+}
+
+/** One OHLCV bar. Net-flow fields are present only on ULTRA keys
+ * (see `CandlesResponse.net_flow_included`). */
+export interface Candle {
+  /** Bucket start, ISO8601. */
+  t: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume_usd: number;
+  trades: number;
+  market_cap_usd: number | null;
+  // ── ULTRA-only net-flow / liquidity fields ──
+  /** Organic BUY volume USD (buy+sell = volume_usd). */
+  buy_volume_usd?: number | null;
+  /** Organic SELL volume USD. */
+  sell_volume_usd?: number | null;
+  /** buy_volume_usd − sell_volume_usd — the net-flow signal. */
+  net_volume_usd?: number | null;
+  buy_count?: number | null;
+  sell_count?: number | null;
+  volume_mev_usd?: number | null;
+  /** Pool liquidity at bar open; with close → LP add/remove delta. */
+  open_liquidity_usd?: number | null;
+  close_liquidity_usd?: number | null;
+  high_mc_usd?: number | null;
+  low_mc_usd?: number | null;
+}
+
+export interface CandlesResponse {
+  mint: string;
+  timeframe: CandleTimeframe;
+  from: string;
+  to: string;
+  count: number;
+  /** True on ULTRA keys — the net-flow / liquidity fields are populated. */
+  net_flow_included: boolean;
+  candles: Candle[];
+}
+
 /** Payload of a `token:graduation` stream event — every pump.fun graduation
  * (bonding curve complete → PumpSwap migration), tracked deployer or not. */
 export interface GraduationEvent {
@@ -2479,6 +2532,20 @@ class AlphaClient {
    */
   risk(mint: string): Promise<TokenRiskResponse> {
     return this._fetch(buildUrl(this._baseUrl, `/tokens/${encodeURIComponent(mint)}/risk`));
+  }
+
+  /**
+   * v2.14 — OHLCV candlestick time-series (the persisted price/MC trajectory),
+   * 1m–1d, rolled up on read. **PRO+**: OHLCV (open/high/low/close/volume_usd/
+   * trades/market_cap_usd), last 30 days. **ULTRA**: adds per-bar net flow
+   * (buy/sell volume, `net_volume_usd`, buy/sell count, MEV volume), open/close
+   * liquidity (LP delta), MC high/low, and full retained history. The response's
+   * `net_flow_included` flags which set you received.
+   * @param mint Token mint address.
+   * @param params tf (default "1h"), limit (1–1000, default 200), from/to (ISO8601).
+   */
+  candles(mint: string, params: CandlesParams = {}): Promise<CandlesResponse> {
+    return this._fetch(buildUrl(this._baseUrl, `/tokens/${encodeURIComponent(mint)}/candles`, params as Record<string, string | number | undefined>));
   }
 }
 

@@ -12,6 +12,8 @@
 Official TypeScript/JavaScript SDK for the **[MadeOnSol](https://madeonsol.com) Solana API** — zero dependencies, fully typed, works in Node.js ≥ 18 and edge runtimes.
 > Real-time Solana trading intelligence: track 1,069 KOL wallets with <3s latency, score 23,000+ Pump.fun deployers, surface deshred deploy signals **~500ms before on-chain confirmation**, detect multi-KOL coordination, score token rug-risk 0–100 with a transparent factor breakdown, push every pump.fun graduation the second it bonds, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day at [madeonsol.com/pricing](https://madeonsol.com/pricing) — no credit card required.
 
+> **New in 2.14.0** — **OHLCV candles + net flow.** `client.alpha.candles(mint, { tf, limit, from, to })` returns the persisted price/MC trajectory as candlesticks (`1m`/`5m`/`15m`/`1h`/`4h`/`1d`, rolled up on read). **PRO**: OHLCV (`open`/`high`/`low`/`close`/`volume_usd`/`trades`/`market_cap_usd`), last 30 days. **ULTRA**: adds per-bar net flow (`buy_volume_usd`/`sell_volume_usd`/`net_volume_usd`, `buy_count`/`sell_count`, `volume_mev_usd`), liquidity delta (`open_liquidity_usd`/`close_liquidity_usd`) and full history — `net_flow_included` flags which set you got. New types: `Candle`, `CandlesResponse`, `CandlesParams`, `CandleTimeframe`.
+>
 > **New in 2.13.0** — **Token risk score.** `client.alpha.risk(mint)` returns a transparent 0–100 rug-risk/safety score (higher = riskier) for any token: a `band` (`safe`/`caution`/`danger`), an explainable `factors[]` array (each with `key`, `label`, `status`, `points`, `detail`) that sums into the score, and the raw `inputs` it was computed from — mint/freeze authority revocation, liquidity USD + liquidity-to-MC ratio, transfer fee bps, Token-2022 flag, burn detection, launch cohort (SOL + size), deployer bond rate + total deployed, KOL signal, and blacklist status. Plus `score_version` and `as_of`. **PRO/ULTRA only.** New types: `TokenRiskResponse`, `TokenRiskFactor`, `TokenRiskInputs`, `TokenRiskBand`, `TokenRiskStatus`.
 >
 > **New in 2.12.0** — **Launch cohort, liquidity/MC ratio, deployer tier filter, KOL hold stats, and signal performance.** `TokenResponseBody` (single + batch) gains `liquidity_to_mc_ratio`, `launch_cohort_sol`, and `launch_cohort_size`. `client.token.list()` adds `min_liq_mc_ratio`, `max_liq_mc_ratio`, and `deployer_tier` filter params; list items gain `liquidity_to_mc_ratio` and `deployer_tier`. `KolLeaderboardEntry` gains `median_hold_minutes_30d` and `percentile_early_entry_30d`. New top-level method `client.getSignalPerformance(name)` calls `GET /signals/{name}/performance`.
@@ -498,6 +500,20 @@ if (band === "danger") return; // skip risky tokens
 ```
 
 Returns: `TokenRiskResponse`
+
+---
+
+#### `client.alpha.candles(mint, params?)`
+
+OHLCV candlestick time-series — the persisted price/MC trajectory, rolled up to any timeframe on read. **PRO**: OHLCV (last 30 days). **ULTRA**: + per-bar net flow (buy/sell volume, `net_volume_usd`, counts, MEV volume), liquidity delta, and full retained history. Params: `tf` (`1m`|`5m`|`15m`|`1h`|`4h`|`1d`, default `1h`), `limit` (1–1000, default 200), `from`/`to` (ISO8601). `net_flow_included` flags whether the ULTRA fields are populated.
+
+```ts
+const { candles, net_flow_included } = await client.alpha.candles("EPjFW...", { tf: "5m", limit: 100 });
+const last = candles.at(-1);
+console.log(last.close, net_flow_included ? `net flow $${last.net_volume_usd}` : "(ULTRA for net flow)");
+```
+
+Returns: `CandlesResponse`
 
 ---
 
