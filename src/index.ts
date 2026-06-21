@@ -1196,6 +1196,8 @@ export interface DeployerAlert {
   priority: string;
   created_at: string;
   market_cap_at_alert?: number | null;
+  /** Deployer wallet's SOL balance at alert time, in SOL. Null when unknown. */
+  deployer_sol_balance?: number | null;
   deployers: DeployerSummary;
   kol_buys?: KolBuysSummary | null;
 }
@@ -1597,6 +1599,32 @@ export interface CandlesResponse {
   /** True on ULTRA keys — the net-flow / liquidity fields are populated. */
   net_flow_included: boolean;
   candles: Candle[];
+}
+
+export type TokenFlowWindow = "1h" | "24h";
+
+export interface TokenFlowParams {
+  /** Lookback window. Default "1h". */
+  window?: TokenFlowWindow;
+}
+
+/** Aggregated buy/sell flow for a token over a 1h or 24h window. */
+export interface TokenFlowResponse {
+  mint: string;
+  window: TokenFlowWindow;
+  /** ISO8601 window start. */
+  from: string;
+  unique_wallets: number;
+  unique_buyers: number;
+  unique_sellers: number;
+  buy_count: number;
+  sell_count: number;
+  total_trades: number;
+  buy_sol: number;
+  sell_sol: number;
+  /** buy_sol − sell_sol — the net SOL flow. */
+  net_sol: number;
+  trades_per_wallet: number;
 }
 
 /** Payload of a `token:graduation` stream event — every pump.fun graduation
@@ -2547,6 +2575,17 @@ class AlphaClient {
   candles(mint: string, params: CandlesParams = {}): Promise<CandlesResponse> {
     return this._fetch(buildUrl(this._baseUrl, `/tokens/${encodeURIComponent(mint)}/candles`, params as Record<string, string | number | undefined>));
   }
+
+  /**
+   * v2.15 — Aggregated buy/sell flow for a token over a 1h or 24h window:
+   * unique wallets/buyers/sellers, buy/sell counts and SOL volumes, `net_sol`
+   * (buy_sol − sell_sol), and `trades_per_wallet`. **PRO+** — keyed.
+   * @param mint Token mint address.
+   * @param params window ("1h" default, or "24h").
+   */
+  tokenFlow(mint: string, params: TokenFlowParams = {}): Promise<TokenFlowResponse> {
+    return this._fetch(buildUrl(this._baseUrl, `/tokens/${encodeURIComponent(mint)}/flow`, params as Record<string, string | number | undefined>));
+  }
 }
 
 // ─── Token namespace (/token/{mint}) ─────────────────────────────────────────
@@ -3445,7 +3484,7 @@ export class MadeOnSol {
   }
 
   private _headers(): Record<string, string> {
-    return { Authorization: `Bearer ${this._apiKey}`, Accept: "application/json", "User-Agent": "madeonsol-sdk/2.13.0" };
+    return { Authorization: `Bearer ${this._apiKey}`, Accept: "application/json", "User-Agent": "madeonsol-sdk/2.15.0" };
   }
 
   /**

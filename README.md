@@ -12,6 +12,8 @@
 Official TypeScript/JavaScript SDK for the **[MadeOnSol](https://madeonsol.com) Solana API** — zero dependencies, fully typed, works in Node.js ≥ 18 and edge runtimes.
 > Real-time Solana trading intelligence: track 1,069 KOL wallets with <3s latency, score 23,000+ Pump.fun deployers, surface deshred deploy signals **~500ms before on-chain confirmation**, detect multi-KOL coordination, score token rug-risk 0–100 with a transparent factor breakdown, push every pump.fun graduation the second it bonds, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day at [madeonsol.com/pricing](https://madeonsol.com/pricing) — no credit card required.
 
+> **New in 2.15.0** — **Token flow + deployer SOL balance.** `client.alpha.tokenFlow(mint, { window })` (`GET /tokens/{mint}/flow`, `window` `1h` default or `24h`, **PRO+**) returns aggregated buy/sell flow for a token: `unique_wallets`/`unique_buyers`/`unique_sellers`, `buy_count`/`sell_count`/`total_trades`, `buy_sol`/`sell_sol`/`net_sol` (buy − sell), and `trades_per_wallet`, plus the window `from` timestamp. New types: `TokenFlowResponse`, `TokenFlowParams`, `TokenFlowWindow`. Deployer-alert objects (`DeployerAlert`) now also carry `deployer_sol_balance` (the deployer wallet's SOL balance at alert time, `number | null`).
+>
 > **New in 2.14.0** — **OHLCV candles + net flow.** `client.alpha.candles(mint, { tf, limit, from, to })` returns the persisted price/MC trajectory as candlesticks (`1m`/`5m`/`15m`/`1h`/`4h`/`1d`, rolled up on read). **PRO**: OHLCV (`open`/`high`/`low`/`close`/`volume_usd`/`trades`/`market_cap_usd`), last 30 days. **ULTRA**: adds per-bar net flow (`buy_volume_usd`/`sell_volume_usd`/`net_volume_usd`, `buy_count`/`sell_count`, `volume_mev_usd`), liquidity delta (`open_liquidity_usd`/`close_liquidity_usd`) and full history — `net_flow_included` flags which set you got. New types: `Candle`, `CandlesResponse`, `CandlesParams`, `CandleTimeframe`.
 >
 > **New in 2.13.0** — **Token risk score.** `client.alpha.risk(mint)` returns a transparent 0–100 rug-risk/safety score (higher = riskier) for any token: a `band` (`safe`/`caution`/`danger`), an explainable `factors[]` array (each with `key`, `label`, `status`, `points`, `detail`) that sums into the score, and the raw `inputs` it was computed from — mint/freeze authority revocation, liquidity USD + liquidity-to-MC ratio, transfer fee bps, Token-2022 flag, burn detection, launch cohort (SOL + size), deployer bond rate + total deployed, KOL signal, and blacklist status. Plus `score_version` and `as_of`. **PRO/ULTRA only.** New types: `TokenRiskResponse`, `TokenRiskFactor`, `TokenRiskInputs`, `TokenRiskBand`, `TokenRiskStatus`.
@@ -517,6 +519,19 @@ Returns: `CandlesResponse`
 
 ---
 
+#### `client.alpha.tokenFlow(mint, params?)`
+
+Aggregated buy/sell flow for a token over a rolling window. **PRO+** (keyed). Params: `window` (`1h` default, or `24h`). Returns unique wallet/buyer/seller counts, buy/sell counts and SOL volumes, `net_sol` (`buy_sol − sell_sol`), and `trades_per_wallet`, plus the window `from` timestamp.
+
+```ts
+const flow = await client.alpha.tokenFlow("EPjFW...", { window: "24h" });
+console.log(`${flow.unique_wallets} wallets · net ${flow.net_sol} SOL`);
+```
+
+Returns: `TokenFlowResponse`
+
+---
+
 ### Wallet Tracker — `client.walletTracker`
 
 #### `client.walletTracker.watchlist()`
@@ -751,6 +766,8 @@ const { alerts } = await client.deployer.alerts({
   offset: 0,
 });
 ```
+
+Each `DeployerAlert` carries the deploy details plus `deployer_sol_balance` — the deployer wallet's SOL balance at alert time (`number | null` when unknown).
 
 Returns: `DeployerAlertsResponse`
 
