@@ -17,6 +17,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "route-parity": "node scripts/route-parity-check.mjs",
     "preflight": "bash ./scripts/preflight-publish.sh",
     "prepublishOnly": "npm run preflight && npm run build"
   },
