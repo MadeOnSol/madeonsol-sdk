@@ -12,6 +12,8 @@
 Official TypeScript/JavaScript SDK for the **[MadeOnSol](https://madeonsol.com) Solana API** — zero dependencies, fully typed, works in Node.js ≥ 18 and edge runtimes.
 > Real-time Solana trading intelligence: track 1,069 KOL wallets with <3s latency, score 23,000+ Pump.fun deployers, surface deshred deploy signals **~500ms before on-chain confirmation**, detect multi-KOL coordination, score token rug-risk 0–100 with a transparent factor breakdown, push every pump.fun graduation the second it bonds, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day at [madeonsol.com/pricing](https://madeonsol.com/pricing) — no credit card required.
 
+> **New in 2.16.0** — **Almost-bonded discovery + trending sorts.** `client.token.almostBonded({ min_progress, min_velocity_pct_per_min, deployer_tier, sort, limit })` — pre-bond pump.fun tokens near graduation, ranked by velocity (Δprogress/min): "95% and accelerating" beats "92% stalled". Each token carries `progress_pct`, `velocity_pct_per_min`, `eta_minutes`, `stalled`, `real_sol_reserves`, `market_cap_usd`, `liquidity_usd`, `authorities_revoked`, `deployer_tier`, and `age_minutes`. **PRO/ULTRA only.** New types: `AlmostBondedParams`, `AlmostBondedToken`, `AlmostBondedResponse`, `AlmostBondedSort`. Plus `client.token.list({ sort })` gains four momentum sorts — `mc_change_5m_desc`, `mc_change_1h_desc`, `volume_1h_desc`, and `trending` (composite recent-volume × positive-momentum rank).
+>
 > **New in 2.15.0** — **Token flow + deployer SOL balance.** `client.alpha.tokenFlow(mint, { window })` (`GET /tokens/{mint}/flow`, `window` `1h` default or `24h`, **PRO+**) returns aggregated buy/sell flow for a token: `unique_wallets`/`unique_buyers`/`unique_sellers`, `buy_count`/`sell_count`/`total_trades`, `buy_sol`/`sell_sol`/`net_sol` (buy − sell), and `trades_per_wallet`, plus the window `from` timestamp. New types: `TokenFlowResponse`, `TokenFlowParams`, `TokenFlowWindow`. Deployer-alert objects (`DeployerAlert`) now also carry `deployer_sol_balance` (the deployer wallet's SOL balance at alert time, `number | null`).
 >
 > **New in 2.14.0** — **OHLCV candles + net flow.** `client.alpha.candles(mint, { tf, limit, from, to })` returns the persisted price/MC trajectory as candlesticks (`1m`/`5m`/`15m`/`1h`/`4h`/`1d`, rolled up on read). **PRO**: OHLCV (`open`/`high`/`low`/`close`/`volume_usd`/`trades`/`market_cap_usd`), last 30 days. **ULTRA**: adds per-bar net flow (`buy_volume_usd`/`sell_volume_usd`/`net_volume_usd`, `buy_count`/`sell_count`, `volume_mev_usd`), liquidity delta (`open_liquidity_usd`/`close_liquidity_usd`) and full history — `net_flow_included` flags which set you got. New types: `Candle`, `CandlesResponse`, `CandlesParams`, `CandleTimeframe`.
@@ -850,6 +852,8 @@ Filtered, sortable token directory. Default `min_liq=2000` trims the long tail o
 
 **Computed post-filters** (over-fetches 3×): `min_volume_1h_usd`, `max_mev_share_pct`, `mc_change_1h_min_pct`, `mc_change_1h_max_pct`. When any of these are set, `pagination.post_filtered` is `true` and page size may be smaller than `limit`.
 
+**Sort** (`sort`): `mc_desc` (default), `mc_asc`, `last_trade_desc`, `liquidity_desc`, `cumulative_volume_desc`, plus *(new in 2.15)* the momentum sorts `mc_change_5m_desc`, `mc_change_1h_desc`, `volume_1h_desc`, and `trending` (composite recent-volume × positive-momentum rank, DB-native — paginates correctly with no over-fetch).
+
 Each item in `tokens[]` includes `liquidity_to_mc_ratio` and `deployer_tier` *(new in 2.12)*.
 
 ```ts
@@ -873,6 +877,27 @@ const { tokens } = await client.token.list({
 ```
 
 Returns: `TokenListResponse` (with `tokens[]`, `pagination`, `filters` echo)
+
+#### `client.token.almostBonded(params?)` *(new in 2.15 — PRO+)*
+
+Pre-bond pump.fun tokens approaching graduation, ranked by **velocity** (Δprogress/min) — "95% and accelerating" beats "92% stalled". Each token is enriched with its deployer's reputation tier.
+
+**Params** (all optional): `min_progress` (default 80), `max_progress` (default 99.99), `min_velocity_pct_per_min`, `max_age_minutes`, `deployer_tier` (`elite`/`good`/`moderate`/`rising`/`cold`/`unranked`), `authority_revoked`, `min_liq`, `sort` (`velocity_desc` default / `progress_desc` / `eta_asc`), `limit` (1–100, default 50).
+
+Each item in `tokens[]`: `mint`, `symbol`, `name`, `progress_pct`, `velocity_pct_per_min` (null until a 5m snapshot exists), `eta_minutes` (linear projection), `stalled`, `real_sol_reserves`, `market_cap_usd`, `liquidity_usd`, `authorities_revoked`, `deployer_tier`, `age_minutes`.
+
+```ts
+// Tokens >90% bonded, accelerating, from a credible deployer — soonest first
+const { tokens } = await client.token.almostBonded({
+  min_progress: 90,
+  min_velocity_pct_per_min: 0.5,
+  deployer_tier: "elite",
+  sort: "eta_asc",
+  limit: 25,
+});
+```
+
+Returns: `AlmostBondedResponse` (with `tokens[]`, `filters`, `returned`, `note`)
 
 #### `client.token.batchBuyerQuality(mints)`
 

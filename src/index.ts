@@ -2018,7 +2018,12 @@ export type TokenListSort =
   | "mc_asc"
   | "last_trade_desc"
   | "liquidity_desc"
-  | "cumulative_volume_desc";
+  | "cumulative_volume_desc"
+  // v2.15 — momentum / trending sorts (DB-native via token_prices_trending view)
+  | "mc_change_5m_desc"
+  | "mc_change_1h_desc"
+  | "volume_1h_desc"
+  | "trending";
 
 export type TokenPrimaryDex =
   | "pumpfun"
@@ -2093,6 +2098,59 @@ export interface TokenListResponse {
     post_filtered: boolean;
   };
   filters: Record<string, unknown>;
+  _rid?: string;
+}
+
+// ─── /tokens/almost-bonded types — v2.15 ─────────────────────────────────────
+
+export type AlmostBondedSort = "velocity_desc" | "progress_desc" | "eta_asc";
+
+export interface AlmostBondedParams {
+  /** Lower bound on bonding progress %. Default 80. */
+  min_progress?: number;
+  /** Upper bound on bonding progress %. Default 99.99 (already-bonded excluded). */
+  max_progress?: number;
+  /** Minimum Δprogress/min. Tokens without a 5m-ago snapshot are dropped when set. */
+  min_velocity_pct_per_min?: number;
+  /** Max minutes since deploy (post-filter). */
+  max_age_minutes?: number;
+  /** Filter by deployer reputation tier. */
+  deployer_tier?: "elite" | "good" | "moderate" | "rising" | "cold" | "unranked";
+  /** Only tokens whose mint+freeze authorities are revoked. */
+  authority_revoked?: boolean;
+  /** Minimum liquidity_usd. */
+  min_liq?: number;
+  /** Sort axis. Default "velocity_desc". */
+  sort?: AlmostBondedSort;
+  /** Page size (1–100). Default 50. */
+  limit?: number;
+}
+
+export interface AlmostBondedToken {
+  mint: string;
+  symbol: string | null;
+  name: string | null;
+  /** Bonding-curve progress %, from on-chain real_token_reserves depletion. */
+  progress_pct: number | null;
+  /** Δprogress per minute; null until a 5m-ago snapshot exists. */
+  velocity_pct_per_min: number | null;
+  /** Linear projection of minutes-to-bond from current velocity; null when not measurable. */
+  eta_minutes: number | null;
+  /** True when |velocity| is below the stall threshold; null when velocity is unknown. */
+  stalled: boolean | null;
+  real_sol_reserves: number | null;
+  market_cap_usd: number | null;
+  liquidity_usd: number | null;
+  authorities_revoked: boolean;
+  deployer_tier: string | null;
+  age_minutes: number | null;
+}
+
+export interface AlmostBondedResponse {
+  tokens: AlmostBondedToken[];
+  filters: Record<string, unknown>;
+  returned: number;
+  note: string;
   _rid?: string;
 }
 
@@ -2649,6 +2707,26 @@ class TokenClient {
    */
   list(params?: TokenListParams): Promise<TokenListResponse> {
     return this._fetch(buildUrl(this._baseUrl, "/tokens", params as Record<string, string | number | boolean | undefined>));
+  }
+
+  /**
+   * v2.15 — Pre-bond pump.fun tokens approaching graduation, ranked by velocity
+   * (Δprogress/min) — "95% and accelerating" beats "92% stalled". **PRO+** only.
+   * Each token is enriched with deployer reputation tier. `progress_pct` comes
+   * from on-chain real_token_reserves depletion; `velocity_pct_per_min` is null
+   * until a 5-minute snapshot exists; `eta_minutes` is a linear projection.
+   * @example
+   * ```ts
+   * const { tokens } = await client.token.almostBonded({
+   *   min_progress: 90,
+   *   min_velocity_pct_per_min: 0.5,
+   *   sort: "eta_asc",
+   *   limit: 25,
+   * });
+   * ```
+   */
+  almostBonded(params?: AlmostBondedParams): Promise<AlmostBondedResponse> {
+    return this._fetch(buildUrl(this._baseUrl, "/tokens/almost-bonded", params as Record<string, string | number | boolean | undefined>));
   }
 
   /**
