@@ -12,6 +12,8 @@
 Official TypeScript/JavaScript SDK for the **[MadeOnSol](https://madeonsol.com) Solana API** — zero dependencies, fully typed, works in Node.js ≥ 18 and edge runtimes.
 > Real-time Solana trading intelligence: track 1,069 KOL wallets with <3s latency, score 23,000+ Pump.fun deployers, surface deshred deploy signals **~500ms before on-chain confirmation**, detect multi-KOL coordination, score token rug-risk 0–100 with a transparent factor breakdown, push every pump.fun graduation the second it bonds, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day at [madeonsol.com/pricing](https://madeonsol.com/pricing) — no credit card required.
 
+> **New in 2.17.0** — **Batch risk scoring + live stream-session control.** `client.token.batchRisk(mints)` (`POST /tokens/batch/risk`, up to 50 mints, **counts as 1 request**) returns the same transparent 0–100 rug-risk result as `client.alpha.risk(mint)` for each mint (with `as_of`); untracked mints come back as `{ mint, error: "not_tracked" }` without failing the batch. `client.stream.sessions()` lists your live WebSocket sessions (`ws-streaming` + `dex-stream`) and `client.stream.deleteSession(id)` force-closes one to free a slot a ghost socket is holding. **PRO/ULTRA only.** New types: `TokenRiskBatchResponse`, `TokenRiskBatchItem`, `TokenRiskBatchError`, `StreamSession`, `StreamSessionsResponse`, `StreamSessionEvictResponse`.
+>
 > **New in 2.16.0** — **Almost-bonded discovery + trending sorts.** `client.token.almostBonded({ min_progress, min_velocity_pct_per_min, deployer_tier, sort, limit })` — pre-bond pump.fun tokens near graduation, ranked by velocity (Δprogress/min): "95% and accelerating" beats "92% stalled". Each token carries `progress_pct`, `velocity_pct_per_min`, `eta_minutes`, `stalled`, `real_sol_reserves`, `market_cap_usd`, `liquidity_usd`, `authorities_revoked`, `deployer_tier`, and `age_minutes`. **PRO/ULTRA only.** New types: `AlmostBondedParams`, `AlmostBondedToken`, `AlmostBondedResponse`, `AlmostBondedSort`. Plus `client.token.list({ sort })` gains four momentum sorts — `mc_change_5m_desc`, `mc_change_1h_desc`, `volume_1h_desc`, and `trending` (composite recent-volume × positive-momentum rank).
 >
 > **New in 2.15.0** — **Token flow + deployer SOL balance.** `client.alpha.tokenFlow(mint, { window })` (`GET /tokens/{mint}/flow`, `window` `1h` default or `24h`, **PRO+**) returns aggregated buy/sell flow for a token: `unique_wallets`/`unique_buyers`/`unique_sellers`, `buy_count`/`sell_count`/`total_trades`, `buy_sol`/`sell_sol`/`net_sol` (buy − sell), and `trades_per_wallet`, plus the window `from` timestamp. New types: `TokenFlowResponse`, `TokenFlowParams`, `TokenFlowWindow`. Deployer-alert objects (`DeployerAlert`) now also carry `deployer_sol_balance` (the deployer wallet's SOL balance at alert time, `number | null`).
@@ -905,6 +907,20 @@ Batch buyer-quality scoring for up to 50 mints. Shares the same 5-minute LRU cac
 
 Returns: `AlphaBuyerQualityBatchResponse`
 
+#### `client.token.batchRisk(mints)` *(new in 2.17 — PRO+)*
+
+Batch token risk scoring for up to 50 mints in a single request that **counts as 1** against your quota — each item is the same transparent 0–100 rug-risk result as `client.alpha.risk(mint)` (with `band`, `factors[]`, `inputs`, `score_version`, `as_of`). Untracked mints come back as `{ mint, error: "not_tracked" }` without failing the batch. `tokens` preserves de-duplicated input order; `count` is the number of unique mints. **PRO/ULTRA only.**
+
+```ts
+const { tokens, count } = await client.token.batchRisk(["mint1", "mint2", "mint3"]);
+for (const t of tokens) {
+  if ("error" in t) continue;            // untracked / per-mint failure
+  if (t.band === "danger") console.log(`skip ${t.mint} (${t.risk_score})`);
+}
+```
+
+Returns: `TokenRiskBatchResponse` — `{ tokens: (TokenRiskResponse | TokenRiskBatchError)[], count }`
+
 ---
 
 ### Account — `client.me()` *(new in 2.6)*
@@ -986,6 +1002,22 @@ stream.subscribe(["kol:trades", "deployer:alerts"]);
 ```
 
 Channels: `kol:trades`, `kol:coordination`, `kol:first_touches`, `deployer:alerts`, `wallet_tracker:events`, `copytrade:signals`, `price_alert:events`, `sniper:deploys`, `token:graduations` (every pump.fun graduation in real time, tracked deployer or not — typed `GraduationEvent`). Lifecycle: `open`, `close`, `reconnect`, `heartbeat`, `error`. Node 22+ uses the global `WebSocket`; on Node < 22 also `npm i ws`.
+
+#### `client.stream.sessions()` / `client.stream.deleteSession(id)` *(new in 2.17 — PRO+)*
+
+Audit and evict your **live** WebSocket sessions across the KOL/deployer (`ws-streaming`) and all-DEX (`dex-stream`) services. `sessions()` lists each open connection; `deleteSession(id)` force-closes one — handy for freeing a connection slot held by a ghost/stale socket after a network drop.
+
+```ts
+const { sessions, count } = await client.stream.sessions();
+for (const s of sessions) {
+  console.log(s.id, s.service, s.channels, s.messages_sent);
+}
+
+// Kill a stale session to free a slot
+const { evicted } = await client.stream.deleteSession(sessions[0].id);
+```
+
+`deleteSession()` returns `{ evicted: true, id }`; it throws a 404 if no live session has that id, or a 400 if `id` is not a positive integer. Types: `StreamSession`, `StreamSessionsResponse`, `StreamSessionEvictResponse`.
 
 ---
 

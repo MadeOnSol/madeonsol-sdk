@@ -1548,6 +1548,28 @@ export interface TokenRiskResponse {
   as_of: string;
 }
 
+/** Per-mint error entry in a batch-risk response. Untracked mints come back as
+ * `"not_tracked"`; a per-mint scoring failure comes back as `"error"`. Neither
+ * fails the batch. */
+export interface TokenRiskBatchError {
+  mint: string;
+  error: "not_tracked" | "error";
+}
+
+/** One entry in `TokenRiskBatchResponse.tokens` — either a full risk result
+ * (same shape as `alpha.risk(mint)`, plus `as_of`) or a per-mint error stub.
+ * Discriminate on the presence of the `error` field. */
+export type TokenRiskBatchItem = TokenRiskResponse | TokenRiskBatchError;
+
+/** Bulk token risk scoring — up to 50 mints in one request that counts as 1
+ * against quota. `tokens` preserves de-duplicated input order; `count` is the
+ * number of unique mints. **PRO/ULTRA only.** */
+export interface TokenRiskBatchResponse {
+  tokens: TokenRiskBatchItem[];
+  count: number;
+  _rid?: string;
+}
+
 export type CandleTimeframe = "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
 
 export interface CandlesParams {
@@ -2341,6 +2363,33 @@ export interface StreamToken {
   _rid?: string;
 }
 
+/** A live WebSocket session for your API key (as returned by
+ * `client.stream.sessions()`). */
+export interface StreamSession {
+  id: string;
+  /** Which streaming service the socket is connected to. */
+  service: "ws-streaming" | "dex-stream";
+  tier: string;
+  channels: string[];
+  /** ISO-8601 connect time. */
+  connected_at: string;
+  remote_ip: string | null;
+  messages_sent: number;
+}
+
+export interface StreamSessionsResponse {
+  sessions: StreamSession[];
+  count: number;
+  _rid?: string;
+}
+
+/** Result of evicting a live session via `client.stream.deleteSession(id)`. */
+export interface StreamSessionEvictResponse {
+  evicted: true;
+  id: string;
+  _rid?: string;
+}
+
 // ─── Webhook types ──────────────────────────────────────────────────────────
 
 export interface WebhookCreateParams {
@@ -2684,6 +2733,19 @@ class TokenClient {
    */
   batchBuyerQuality(mints: string[]): Promise<AlphaBuyerQualityBatchResponse> {
     return this._post(`${this._baseUrl}/tokens/batch/buyer-quality`, { mints });
+  }
+
+  /**
+   * Batch token risk scoring for up to 50 mints — the same transparent 0–100
+   * rug-risk result as `client.alpha.risk(mint)` (each stamped with `as_of`) in
+   * a single request that counts as 1 against your quota. Untracked mints come
+   * back as `{ mint, error: "not_tracked" }` without failing the batch; `tokens`
+   * preserves de-duplicated input order and `count` is the number of unique
+   * mints. **PRO/ULTRA only.**
+   * @param mints Array of 1–50 Solana token mints.
+   */
+  batchRisk(mints: string[]): Promise<TokenRiskBatchResponse> {
+    return this._post(`${this._baseUrl}/tokens/batch/risk`, { mints });
   }
 
   /**
@@ -3410,7 +3472,12 @@ class ToolsClient {
 // ─── Stream namespace ───────────────────────────────────────────────────────
 
 class StreamClient {
-  constructor(private readonly _post: <T>(url: string) => Promise<T>, private readonly _baseUrl: string) {}
+  constructor(
+    private readonly _get: <T>(url: string) => Promise<T>,
+    private readonly _post: <T>(url: string) => Promise<T>,
+    private readonly _delete: <T>(url: string) => Promise<T>,
+    private readonly _baseUrl: string,
+  ) {}
 
   /**
    * Generate a 24-hour WebSocket streaming token.
@@ -3419,6 +3486,27 @@ class StreamClient {
    */
   getToken(): Promise<StreamToken> {
     return this._post(buildUrl(this._baseUrl, "/stream/token"));
+  }
+
+  /**
+   * List your live WebSocket sessions across the KOL/deployer (`ws-streaming`)
+   * and all-DEX (`dex-stream`) services — id, tier, subscribed channels, connect
+   * time, remote IP, and messages sent. Useful for auditing open connections and
+   * finding a ghost session that's holding a connection slot. **PRO/ULTRA only.**
+   */
+  sessions(): Promise<StreamSessionsResponse> {
+    return this._get(buildUrl(this._baseUrl, "/stream/sessions"));
+  }
+
+  /**
+   * Force-close (evict) a live WebSocket session by id — frees the connection
+   * slot a ghost/stale socket is holding. Returns `{ evicted: true, id }`; throws
+   * a 404 if no live session has that id, or a 400 if `id` is not a positive
+   * integer. **PRO/ULTRA only.**
+   * @param id Session id (positive integer, as a number or string).
+   */
+  deleteSession(id: number | string): Promise<StreamSessionEvictResponse> {
+    return this._delete(buildUrl(this._baseUrl, `/stream/sessions/${encodeURIComponent(id)}`));
   }
 
   /**
@@ -3550,7 +3638,7 @@ export class MadeOnSol {
     this.alpha = new AlphaClient(boundGet, this._baseUrl);
     this.token = new TokenClient(boundGet, boundPost, this._baseUrl);
     this.tools = new ToolsClient(boundGet, this._baseUrl);
-    this.stream = new StreamClient(boundPost, this._baseUrl);
+    this.stream = new StreamClient(boundGet, boundPost, boundDelete, this._baseUrl);
     this.webhooks = new WebhookClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
     this.walletTracker = new WalletTrackerClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
     this.wallet = new WalletClient(boundGet, this._baseUrl);
