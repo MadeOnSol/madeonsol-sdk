@@ -97,5 +97,5 @@ All methods throw `MadeOnSolError` with `.message`, `.status`, and `.body` prope
 
 - Documentation: https://madeonsol.com/api-docs
 - Website: https://madeonsol.com
-- GitHub: https://github.com/LamboPoewert/madeonsol-sdk
+- GitHub: https://github.com/madeonsol/madeonsol-sdk
 - npm: https://www.npmjs.com/package/madeonsol
