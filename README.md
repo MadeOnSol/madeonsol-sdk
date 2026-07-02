@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/madeonsol?style=flat-square)](https://www.npmjs.com/package/madeonsol)
 [![npm downloads](https://img.shields.io/npm/dm/madeonsol?style=flat-square)](https://www.npmjs.com/package/madeonsol)
-[![GitHub stars](https://img.shields.io/github/stars/LamboPoewert/madeonsol-sdk?style=flat-square&logo=github)](https://github.com/madeonsol/madeonsol-sdk)
+[![GitHub stars](https://img.shields.io/github/stars/madeonsol/madeonsol-sdk?style=flat-square&logo=github)](https://github.com/madeonsol/madeonsol-sdk)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.4+-blue?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Zero Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen?style=flat-square)](package.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
