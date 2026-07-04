@@ -10,8 +10,10 @@
 > ⭐ **[Star on GitHub](https://github.com/madeonsol/madeonsol-sdk)** if you find this useful · 📂 **[Examples](./examples/)** · 📚 **[API docs](https://madeonsol.com/api-docs)**
 
 Official TypeScript/JavaScript SDK for the **[MadeOnSol](https://madeonsol.com) Solana API** — zero dependencies, fully typed, works in Node.js ≥ 18 and edge runtimes.
-> Real-time Solana trading intelligence: track 1,069 KOL wallets with <3s latency, score 23,000+ Pump.fun deployers, surface deshred deploy signals **~500ms before on-chain confirmation**, detect multi-KOL coordination, score token rug-risk 0–100 with a transparent factor breakdown, push every pump.fun graduation the second it bonds, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day at [madeonsol.com/pricing](https://madeonsol.com/pricing) — no credit card required.
+> Real-time Solana trading intelligence: track 1,069 KOL wallets with <3s latency, score 23,000+ Pump.fun deployers, surface deshred deploy signals **~500ms before on-chain confirmation**, detect multi-KOL coordination, score token rug-risk 0–100 with a transparent factor breakdown, expose the bundle cohort that bought a token together and how much of supply it still holds, push every pump.fun graduation the second it bonds, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day at [madeonsol.com/pricing](https://madeonsol.com/pricing) — no credit card required.
 
+> **New in 2.18.0** — **Bundle cohort intelligence.** `client.alpha.bundle(mint)` (`GET /tokens/{mint}/bundle`) surfaces the wallets that bought a token together — in one atomic transaction (`bundle_kind: "atomic_tx"`) or the same slot (`"same_slot"`) — and, headline first, how much of supply they still hold. The `bundle` summary block (returned on every tier) carries `held_pct_of_supply` (0–1 of total supply, HEADLINE), `bundle_kind`, `wallet_count`, `held_ratio`, `fully_exited`, `buy_volume`, and `tokens_held`. **Tier-gated:** BASIC/TRADER get the `bundle` block only (`wallets: []`); PRO adds the top-10 cohort wallets with flags (`held_ratio`, `has_sold`, `atomic`, `is_kol`); ULTRA returns the full cohort plus identity (`kol_name`, `win_rate`, `bot_confidence`) and per-wallet `tokens_held`. New types: `TokenBundleResponse`, `BundleSummary`, `BundleWallet`, `BundleKind`.
+>
 > **New in 2.17.0** — **Batch risk scoring + live stream-session control.** `client.token.batchRisk(mints)` (`POST /tokens/batch/risk`, up to 50 mints, **counts as 1 request**) returns the same transparent 0–100 rug-risk result as `client.alpha.risk(mint)` for each mint (with `as_of`); untracked mints come back as `{ mint, error: "not_tracked" }` without failing the batch. `client.stream.sessions()` lists your live WebSocket sessions (`ws-streaming` + `dex-stream`) and `client.stream.deleteSession(id)` force-closes one to free a slot a ghost socket is holding. **PRO/ULTRA only.** New types: `TokenRiskBatchResponse`, `TokenRiskBatchItem`, `TokenRiskBatchError`, `StreamSession`, `StreamSessionsResponse`, `StreamSessionEvictResponse`.
 >
 > **New in 2.16.0** — **Almost-bonded discovery + trending sorts.** `client.token.almostBonded({ min_progress, min_velocity_pct_per_min, deployer_tier, sort, limit })` — pre-bond pump.fun tokens near graduation, ranked by velocity (Δprogress/min): "95% and accelerating" beats "92% stalled". Each token carries `progress_pct`, `velocity_pct_per_min`, `eta_minutes`, `stalled`, `real_sol_reserves`, `market_cap_usd`, `liquidity_usd`, `authorities_revoked`, `deployer_tier`, and `age_minutes`. **PRO/ULTRA only.** New types: `AlmostBondedParams`, `AlmostBondedToken`, `AlmostBondedResponse`, `AlmostBondedSort`. Plus `client.token.list({ sort })` gains four momentum sorts — `mc_change_5m_desc`, `mc_change_1h_desc`, `volume_1h_desc`, and `trending` (composite recent-volume × positive-momentum rank).
@@ -58,6 +60,7 @@ const { trades } = await client.kol.feed({ limit: 5, action: "buy" });
 | **Deshred Sniper** | Deploy feed reconstructed from shred-level data — surfaces new pump.fun launches **~500ms before on-chain confirmation**. PRO: elite/good deployers. ULTRA: all tiers + custom watchlist. Use WebSocket/webhook for live push. |
 | **Alpha Wallet Intel** | Leaderboard of 1M+ scored early-buyer wallets, full wallet profiles, linked-wallet clustering, token cap-table enrichment, and 0–100 buyer quality scores with dump-cluster wallet detection. |
 | **Token Risk Score** | Transparent 0–100 rug-risk/safety score per token with a `safe`/`caution`/`danger` band, explainable factor breakdown, and the raw inputs (authorities, liquidity, transfer fee, launch cohort, deployer bond rate, KOL signal, blacklist). PRO/ULTRA. |
+| **Bundle Cohort** | The wallets that bought a token together (one atomic tx or the same slot) and — headline first — `held_pct_of_supply` still held, plus `held_ratio`, `fully_exited`, and buy volume. Every tier gets the summary; PRO adds top-10 wallet flags; ULTRA adds KOL identity, win rate, bot confidence, and per-wallet balances. |
 | **Universal Wallet** | FIFO cost-basis PnL, open positions (hydrated with live prices), and raw trade history for **any** Solana wallet — not just curated KOLs. 90-day window, server-side cache. PRO+. |
 | **Price Alerts** | Token MC dip/recovery alerts delivered via WebSocket or HMAC-signed webhook. PRO: 5 rules, ULTRA: 25. |
 | **Wallet Tracker** | Monitor any Solana wallet for swaps and transfers. Track up to 10/50/100 wallets (Free/Pro/Ultra). Full wallets, counterparties, and tx_signatures on every tier. 120-day event retention. WS events on ULTRA. |
@@ -125,6 +128,7 @@ const { tools } = await client.tools.search({ q: "trading", limit: 10 });
 - **Coordination detector** — flag tokens with `client.kol.coordination({ min_kols: 3, min_score: 70 })`
 - **Scout signal** — track first-KOL-touch events filtered to S/A-tier scouts via `client.kol.firstTouches({ preset: "scout" })`
 - **Rug-risk gate** — score a token with `client.alpha.risk(mint)` and skip anything in the `danger` band before buying
+- **Bundle-cohort check** — call `client.alpha.bundle(mint)` and bail when `held_pct_of_supply` is high (a bundle still sitting on supply can dump) or when the cohort hasn't `fully_exited`
 - **Wallet analyser** — `client.wallet.pnl()` for FIFO cost-basis PnL on any Solana wallet
 - **Price alert bot** — `client.priceAlerts.create()` for MC dip/recovery alerts delivered via webhook
 - **Analytics dashboard** — combine leaderboard, PnL, token velocity, and tool data
@@ -506,6 +510,19 @@ if (band === "danger") return; // skip risky tokens
 ```
 
 Returns: `TokenRiskResponse`
+
+---
+
+#### `client.alpha.bundle(mint)`
+
+Bundle-cohort holdings — the wallets that bought a token together (one atomic transaction, `bundle_kind: "atomic_tx"`, or the same slot, `"same_slot"`) and, headline first, how much of supply they still hold. The `bundle` summary block (`held_pct_of_supply`, `bundle_kind`, `wallet_count`, `held_ratio`, `fully_exited`, `buy_volume`, `tokens_held`) is returned on **every** tier. BASIC/TRADER get `wallets: []`; PRO adds the top-10 cohort wallets with flags (`held_ratio`, `has_sold`, `atomic`, `is_kol`); ULTRA returns the full cohort plus identity (`kol_name`, `win_rate`, `bot_confidence`) and per-wallet `tokens_held`.
+
+```ts
+const { bundle, wallets } = await client.alpha.bundle("EPjFW...");
+if ((bundle.held_pct_of_supply ?? 0) > 0.2 && !bundle.fully_exited) return; // bundle still holds supply
+```
+
+Returns: `TokenBundleResponse`
 
 ---
 

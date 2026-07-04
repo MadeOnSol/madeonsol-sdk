@@ -1570,6 +1570,67 @@ export interface TokenRiskBatchResponse {
   _rid?: string;
 }
 
+// ─── Token bundle cohort (v2.18) ───────────────────────────────────────────
+
+/** How the bundle cohort was grouped: `"atomic_tx"` (every buy landed in a
+ * single transaction), `"same_slot"` (buys landed in the same slot but across
+ * transactions), or `"none"` (no bundle cohort detected). */
+export type BundleKind = "atomic_tx" | "same_slot" | "none";
+
+/** Bundle-cohort holdings summary for a token — returned on **every** tier. */
+export interface BundleSummary {
+  /** Number of wallets in the detected bundle cohort. */
+  wallet_count: number;
+  /** How the cohort was grouped. */
+  bundle_kind: BundleKind;
+  /** 0–1 share of the tokens the cohort originally bought that it still holds,
+   * or `null` when unknown. */
+  held_ratio: number | null;
+  /** **HEADLINE** — 0–1 share of total token supply the cohort currently holds,
+   * or `null` when unknown. */
+  held_pct_of_supply: number | null;
+  /** True when every wallet in the cohort has fully sold out. */
+  fully_exited: boolean;
+  /** Total SOL the cohort spent buying. */
+  buy_volume: number;
+  /** Total tokens the cohort currently holds. */
+  tokens_held: number;
+}
+
+/** One wallet in the bundle cohort. **PRO** returns the top-10 with flags only;
+ * **ULTRA** adds identity (`kol_name`, `win_rate`, `bot_confidence`) and the
+ * per-wallet `tokens_held` balance (all marked optional / ULTRA-only below). */
+export interface BundleWallet {
+  rank: number;
+  wallet: string;
+  /** 0–1 share of this wallet's bought tokens still held, or `null`. */
+  held_ratio: number | null;
+  has_sold: boolean;
+  /** True when this wallet bought in the atomic bundle transaction. */
+  atomic: boolean;
+  is_kol: boolean;
+  /** ULTRA-only — KOL display name when this wallet is a known KOL. */
+  kol_name?: string | null;
+  /** ULTRA-only — the wallet's historical win rate (0–1). */
+  win_rate?: number | null;
+  /** ULTRA-only — 0–1 bot-likelihood from the alpha classifier. */
+  bot_confidence?: string | null;
+  /** ULTRA-only — tokens this wallet currently holds. */
+  tokens_held?: number | null;
+}
+
+/** Bundle-cohort holdings for a token — the wallets that bought together (one
+ * atomic transaction or the same slot) and how much of supply they still hold.
+ * **Tier-gated:** BASIC/TRADER receive the `bundle` summary block only with
+ * `wallets: []`; PRO adds the top-10 cohort wallets (flags only); ULTRA returns
+ * the full cohort enriched with KOL identity, win rate, bot confidence, and
+ * per-wallet token balances. */
+export interface TokenBundleResponse {
+  mint: string;
+  bundle: BundleSummary;
+  wallets: BundleWallet[];
+}
+
 export type CandleTimeframe = "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
 
 export interface CandlesParams {
@@ -2667,6 +2728,23 @@ class AlphaClient {
    */
   risk(mint: string): Promise<TokenRiskResponse> {
     return this._fetch(buildUrl(this._baseUrl, `/tokens/${encodeURIComponent(mint)}/risk`));
+  }
+
+  /**
+   * v2.18 — Bundle-cohort holdings: the wallets that bought a token together
+   * (one atomic transaction or the same slot) and how much of supply they still
+   * hold. The `bundle` summary block leads with `held_pct_of_supply` (0–1 of
+   * total supply the cohort currently holds) alongside `bundle_kind`
+   * (`"atomic_tx"` | `"same_slot"` | `"none"`), `wallet_count`, `held_ratio`,
+   * `fully_exited`, `buy_volume`, and `tokens_held`.
+   * **Tier-gated:** BASIC/TRADER get the `bundle` block only (`wallets: []`);
+   * PRO adds the top-10 cohort wallets with flags (`held_ratio`, `has_sold`,
+   * `atomic`, `is_kol`); ULTRA returns the full cohort plus identity
+   * (`kol_name`, `win_rate`, `bot_confidence`) and per-wallet `tokens_held`.
+   * @param mint Token mint address.
+   */
+  bundle(mint: string): Promise<TokenBundleResponse> {
+    return this._fetch(buildUrl(this._baseUrl, `/tokens/${encodeURIComponent(mint)}/bundle`));
   }
 
   /**
