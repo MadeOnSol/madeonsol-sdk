@@ -1330,6 +1330,32 @@ export interface DeployerTrajectoryResponse {
   trajectory: DeployerTrajectoryData;
 }
 
+export interface DeployerHistoryParams {
+  /** Number of daily snapshots to return (1–365). Default: 90. */
+  limit?: number;
+}
+
+/** One day's reputation snapshot for a deployer — the state that was true on
+ * `date`, so you can backtest "was this deployer elite when it launched token X?"
+ * without look-ahead bias. */
+export interface DeployerHistorySnapshot {
+  date: string;
+  tier: string;
+  is_tracked: boolean;
+  total_deployed: number;
+  total_bonded: number;
+  bonding_rate: number | null;
+  recent_bond_rate: number | null;
+  avg_peak_mc: number | null;
+  best_token_peak_mc: number | null;
+}
+
+export interface DeployerHistoryResponse {
+  is_deployer: boolean;
+  wallet: string;
+  snapshots: DeployerHistorySnapshot[];
+}
+
 // ─── Alpha wallet intelligence types ─────────────────────────────────────────
 
 export type AlphaSort = "win_rate" | "pnl" | "roi";
@@ -1629,6 +1655,40 @@ export interface TokenBundleResponse {
   mint: string;
   bundle: BundleSummary;
   wallets: BundleWallet[];
+}
+
+/** One DEX pool a token trades in. `is_active` distinguishes live pools from
+ * parked/drained ones; `liquidity_usd`/`last_price_sol`/`last_swap_at` are null
+ * when the pool has no recent on-chain activity. */
+export interface TokenPool {
+  pool_address: string;
+  dex: string;
+  quote_mint: string;
+  liquidity_usd: number | null;
+  last_price_sol: number | null;
+  last_swap_at: string | null;
+  amm_id: string | null;
+  is_active: boolean;
+}
+
+export interface TokenPoolsSummary {
+  pool_count: number;
+  active_pool_count: number;
+  dex_count: number;
+  dexes: string[];
+  total_liquidity_usd: number | null;
+  primary_pool: string | null;
+  primary_dex: string | null;
+  /** Share of total liquidity held by the single largest pool (0–100). */
+  top_pool_share_pct: number | null;
+}
+
+/** Per-venue liquidity map — every DEX pool a token trades in, live vs parked,
+ * plus fragmentation (`dex_count`) and top-pool concentration. */
+export interface TokenPoolsResponse {
+  mint: string;
+  pools: TokenPool[];
+  summary: TokenPoolsSummary;
 }
 
 export type CandleTimeframe = "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
@@ -2748,6 +2808,19 @@ class AlphaClient {
   }
 
   /**
+   * Per-venue liquidity map: every DEX pool a token trades in, each flagged
+   * live (`is_active`) or parked, with `liquidity_usd`, `last_price_sol`, and
+   * `last_swap_at`. The `summary` block rolls up pool/DEX counts, total
+   * liquidity, the primary pool/dex, and `top_pool_share_pct` (largest-pool
+   * concentration) — a fragmentation read for a token's liquidity.
+   * **PRO/ULTRA only** — BASIC receives HTTP 403.
+   * @param mint Token mint address.
+   */
+  tokenPools(mint: string): Promise<TokenPoolsResponse> {
+    return this._fetch(buildUrl(this._baseUrl, `/tokens/${encodeURIComponent(mint)}/pools`));
+  }
+
+  /**
    * v2.14 — OHLCV candlestick time-series (the persisted price/MC trajectory),
    * 1m–1d, rolled up on read. **PRO+**: OHLCV (open/high/low/close/volume_usd/
    * trades/market_cap_usd), last 30 days. **ULTRA**: adds per-bar net flow
@@ -2969,6 +3042,22 @@ class DeployerClient {
    */
   trajectory(wallet: string, params?: { include?: "daily_snapshots" }): Promise<DeployerTrajectoryResponse> {
     return this._fetch(buildUrl(this._baseUrl, `/deployer-hunter/${encodeURIComponent(wallet)}/trajectory`, params as Record<string, string | undefined>));
+  }
+
+  /**
+   * Daily reputation time-series for a deployer — one snapshot per day capturing
+   * the tier, tracked flag, deploy/bond counts, bonding rates, and peak-MC stats
+   * that were true on that date. Backtest "was this deployer elite when it
+   * launched token X?" without look-ahead bias.
+   * @param wallet Deployer wallet address.
+   * @param opts Optional: limit (1–365 daily snapshots, default 90).
+   */
+  deployerHistory(wallet: string, opts?: DeployerHistoryParams): Promise<DeployerHistoryResponse> {
+    return this._fetch(buildUrl(
+      this._baseUrl,
+      `/deployer-hunter/${encodeURIComponent(wallet)}/history`,
+      opts as Record<string, number | undefined>,
+    ));
   }
 }
 

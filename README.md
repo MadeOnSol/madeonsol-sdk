@@ -553,6 +553,19 @@ Returns: `TokenFlowResponse`
 
 ---
 
+#### `client.alpha.tokenPools(mint)`
+
+Per-venue liquidity map — every DEX pool a token trades in, each flagged live (`is_active`) or parked, with `liquidity_usd`, `last_price_sol`, `last_swap_at`, `dex`, `quote_mint`, and `amm_id`. The `summary` block rolls up `pool_count`/`active_pool_count`/`dex_count`, `dexes[]`, `total_liquidity_usd`, the `primary_pool`/`primary_dex`, and `top_pool_share_pct` (largest-pool concentration) — a fragmentation read on a token's liquidity. **PRO/ULTRA only** — BASIC receives HTTP 403.
+
+```ts
+const { pools, summary } = await client.alpha.tokenPools("EPjFW...");
+console.log(`${summary.active_pool_count}/${summary.pool_count} live across ${summary.dex_count} DEXs · top pool ${summary.top_pool_share_pct}%`);
+```
+
+Returns: `TokenPoolsResponse`
+
+---
+
 ### Wallet Tracker — `client.walletTracker`
 
 #### `client.walletTracker.watchlist()`
@@ -831,6 +844,20 @@ const { bonds } = await client.deployer.recentBonds({ limit: 20 });
 ```
 
 Returns: `RecentBondsResponse`
+
+---
+
+#### `client.deployer.deployerHistory(wallet, opts?)`
+
+Daily reputation time-series for a deployer — one snapshot per `date` capturing the `tier`, `is_tracked` flag, `total_deployed`/`total_bonded`, `bonding_rate`, `recent_bond_rate`, `avg_peak_mc`, and `best_token_peak_mc` that were true on that day. Backtest "was this deployer elite when it launched token X?" without look-ahead bias. `opts.limit` is 1–365 daily snapshots (default 90).
+
+```ts
+const { is_deployer, snapshots } = await client.deployer.deployerHistory("3xAB...", { limit: 180 });
+const onLaunch = snapshots.find((s) => s.date === "2025-01-01");
+console.log(onLaunch?.tier, onLaunch?.bonding_rate);
+```
+
+Returns: `DeployerHistoryResponse`
 
 ---
 
