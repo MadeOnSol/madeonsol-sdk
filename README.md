@@ -10,8 +10,12 @@
 > ⭐ **[Star on GitHub](https://github.com/madeonsol/madeonsol-sdk)** if you find this useful · 📂 **[Examples](./examples/)** · 📚 **[API docs](https://madeonsol.com/api-docs)**
 
 Official TypeScript/JavaScript SDK for the **[MadeOnSol](https://madeonsol.com) Solana API** — zero dependencies, fully typed, works in Node.js ≥ 18 and edge runtimes.
-> Real-time Solana trading intelligence: track 1,069 KOL wallets with <3s latency, score 23,000+ Pump.fun deployers, surface deshred deploy signals **~500ms before on-chain confirmation**, detect multi-KOL coordination, score token rug-risk 0–100 with a transparent factor breakdown, expose the bundle cohort that bought a token together and how much of supply it still holds, push every pump.fun graduation the second it bonds, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day at [madeonsol.com/pricing](https://madeonsol.com/pricing) — no credit card required.
+> Real-time Solana trading intelligence: track 1,069 KOL wallets with <3s latency, score 23,000+ Pump.fun deployers, surface deshred deploy signals **~500ms before on-chain confirmation**, detect multi-KOL coordination, score token rug-risk 0–100 with a transparent factor breakdown, expose the bundle cohort that bought a token together and how much of supply it still holds, verify any wallet's current on-chain holdings with airdrop/insider `transfer_delta` detection, push every pump.fun graduation the second it bonds, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day at [madeonsol.com/pricing](https://madeonsol.com/pricing) — no credit card required.
 
+New customers get a 5-day free trial of Pro or Ultra when you pay by card — full access, nothing charged during the trial, cancel anytime. Start at https://madeonsol.com/pricing
+
+> **New in 2.19.0** — **Verified wallet holdings.** `client.wallet.holdings(address, { limit?, min_value_usd? })` (`GET /wallet/{address}/holdings`) reads the wallet's actual current SPL + Token-2022 token accounts and SOL balance straight from chain, enriches each with our price/MC/name/symbol, and computes a `transfer_delta` (on-chain amount − trade-derived net position) — exposing tokens that arrived or left **without a swap** (airdrops, insider funding, wallet-hopping). Distinct from `client.wallet.positions()` (trade-derived FIFO): holdings is "what they actually hold right now". Returns `WalletHoldingsResponse` with a `summary` (`token_accounts`/`non_zero`/`returned`/`priced`/`total_value_usd`/`truncated`), `sol_balance`, and `verified_at`. `limit` 1–500 (default 200), `min_value_usd` ≥0 (default 0). **ULTRA only.** New types: `WalletHoldingsParams`, `WalletHoldingsResponse`, `Holding`.
+>
 > **New in 2.18.0** — **Bundle cohort intelligence.** `client.alpha.bundle(mint)` (`GET /tokens/{mint}/bundle`) surfaces the wallets that bought a token together — in one atomic transaction (`bundle_kind: "atomic_tx"`) or the same slot (`"same_slot"`) — and, headline first, how much of supply they still hold. The `bundle` summary block (returned on every tier) carries `held_pct_of_supply` (0–1 of total supply, HEADLINE), `bundle_kind`, `wallet_count`, `held_ratio`, `fully_exited`, `buy_volume`, and `tokens_held`. **Tier-gated:** BASIC/TRADER get the `bundle` block only (`wallets: []`); PRO adds the top-10 cohort wallets with flags (`held_ratio`, `has_sold`, `atomic`, `is_kol`); ULTRA returns the full cohort plus identity (`kol_name`, `win_rate`, `bot_confidence`) and per-wallet `tokens_held`. New types: `TokenBundleResponse`, `BundleSummary`, `BundleWallet`, `BundleKind`.
 >
 > **New in 2.17.0** — **Batch risk scoring + live stream-session control.** `client.token.batchRisk(mints)` (`POST /tokens/batch/risk`, up to 50 mints, **counts as 1 request**) returns the same transparent 0–100 rug-risk result as `client.alpha.risk(mint)` for each mint (with `as_of`); untracked mints come back as `{ mint, error: "not_tracked" }` without failing the batch. `client.stream.sessions()` lists your live WebSocket sessions (`ws-streaming` + `dex-stream`) and `client.stream.deleteSession(id)` force-closes one to free a slot a ghost socket is holding. **PRO/ULTRA only.** New types: `TokenRiskBatchResponse`, `TokenRiskBatchItem`, `TokenRiskBatchError`, `StreamSession`, `StreamSessionsResponse`, `StreamSessionEvictResponse`.
@@ -62,6 +66,7 @@ const { trades } = await client.kol.feed({ limit: 5, action: "buy" });
 | **Token Risk Score** | Transparent 0–100 rug-risk/safety score per token with a `safe`/`caution`/`danger` band, explainable factor breakdown, and the raw inputs (authorities, liquidity, transfer fee, launch cohort, deployer bond rate, KOL signal, blacklist). PRO/ULTRA. |
 | **Bundle Cohort** | The wallets that bought a token together (one atomic tx or the same slot) and — headline first — `held_pct_of_supply` still held, plus `held_ratio`, `fully_exited`, and buy volume. Every tier gets the summary; PRO adds top-10 wallet flags; ULTRA adds KOL identity, win rate, bot confidence, and per-wallet balances. |
 | **Universal Wallet** | FIFO cost-basis PnL, open positions (hydrated with live prices), and raw trade history for **any** Solana wallet — not just curated KOLs. 90-day window, server-side cache. PRO+. |
+| **Verified Holdings** | Current on-chain SPL + Token-2022 balances + SOL, read straight from chain and enriched with price/MC/name, plus a `transfer_delta` that exposes airdrops / insider funding / wallet-hopping (tokens that moved without a swap). ULTRA. |
 | **Price Alerts** | Token MC dip/recovery alerts delivered via WebSocket or HMAC-signed webhook. PRO: 5 rules, ULTRA: 25. |
 | **Wallet Tracker** | Monitor any Solana wallet for swaps and transfers. Track up to 10/50/100 wallets (Free/Pro/Ultra). Full wallets, counterparties, and tx_signatures on every tier. 120-day event retention. WS events on ULTRA. |
 | **Deployer Hunter** | 23,000+ pump.fun deployers scored by bonding rate — tier leaderboard, deploy alerts, deployer profiles, and best-tokens feed. |
@@ -130,6 +135,7 @@ const { tools } = await client.tools.search({ q: "trading", limit: 10 });
 - **Rug-risk gate** — score a token with `client.alpha.risk(mint)` and skip anything in the `danger` band before buying
 - **Bundle-cohort check** — call `client.alpha.bundle(mint)` and bail when `held_pct_of_supply` is high (a bundle still sitting on supply can dump) or when the cohort hasn't `fully_exited`
 - **Wallet analyser** — `client.wallet.pnl()` for FIFO cost-basis PnL on any Solana wallet
+- **Holdings verifier / airdrop detector** — `client.wallet.holdings()` for verified current on-chain balances, and flag tokens with a nonzero `transfer_delta` (arrived without a swap — airdrops, insider funding, wallet-hopping)
 - **Price alert bot** — `client.priceAlerts.create()` for MC dip/recovery alerts delivered via webhook
 - **Analytics dashboard** — combine leaderboard, PnL, token velocity, and tool data
 - **Telegram/Discord bot** — pipe alerts via webhooks into chat
@@ -700,6 +706,28 @@ for (const p of positions) {
 ```
 
 Returns: `WalletPositionsResponse`. Mints without a current price return `unrealized_sol: null` rather than fabricated zero.
+
+---
+
+#### `client.wallet.holdings(address, params?)`
+
+Verified **current** on-chain holdings — reads the wallet's actual SPL + Token-2022 token accounts and SOL balance straight from chain, enriches each with our price/MC/name/symbol, and computes a `transfer_delta` (on-chain `amount` − trade-derived net position). A nonzero `transfer_delta` exposes tokens that arrived or left **without a swap** — airdrops, insider funding, wallet-hopping. Distinct from `positions()` (trade-derived FIFO): holdings is "what they actually hold right now". **ULTRA only.**
+
+```ts
+const h = await client.wallet.holdings("ASVz...ybJk", { min_value_usd: 10 });
+console.log(`${h.summary.non_zero} tokens · $${h.summary.total_value_usd} · ${h.sol_balance} SOL`);
+for (const t of h.holdings) {
+  const d = t.transfer_delta;
+  const flag = d && d > 0 ? "  ⬅ arrived without a swap" : "";
+  console.log(`  ${t.symbol ?? t.mint.slice(0,8)}…  ${t.amount}  ($${t.value_usd ?? "—"})${flag}`);
+}
+```
+
+Params:
+- `limit` — 1-500, default 200
+- `min_value_usd` — number ≥0, default 0 (minimum USD value per holding to include)
+
+Returns: `WalletHoldingsResponse` — `holdings[]` (typed `Holding`), `sol_balance`, `summary` (`token_accounts` / `non_zero` / `returned` / `priced` / `total_value_usd` / `truncated`), `verified_at`, `trade_window_days`, `cache_hit`, `ttl_seconds`.
 
 ---
 
