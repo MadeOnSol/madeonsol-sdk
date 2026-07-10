@@ -14,6 +14,8 @@ Official TypeScript/JavaScript SDK for the **[MadeOnSol](https://madeonsol.com) 
 
 New customers get a 5-day free trial of Pro or Ultra when you pay by card — full access, nothing charged during the trial, cancel anytime. Start at https://madeonsol.com/pricing
 
+> **New in 2.20.0** — **Wallet batch classify, token trade tape, sniper footprint.** `client.wallet.batchClassify(wallets)` (`POST /wallet/batch/classify`, 1–100 addresses, **PRO+**) returns bulk reputation flags per wallet: `is_sniper`, `is_bundler` (lifetime), `is_dumper` (rolling 42d), `is_kol` + `kol_name`, `bot_confidence`, and `dump_cluster` cohort stats — flags are pump.fun-pipeline scoped (`false` = not observed, NOT verified clean). `client.token.trades(mint, params?)` (`GET /tokens/{mint}/trades`, **PRO+**) is the mint-scoped trade tape — cursor-paginated raw trades with `price_sol`/`price_usd`/`early_buyer_rank`/`slot`, filterable by `action`/`wallet`/`since`/`until`, defaulting to the FULL history (starts 2026-04-12; the `coverage` block carries `history_start` + `scope`). The wallet profile `flags` block (`client.wallet.stats()`) gains the same `is_sniper`/`is_bundler`/`is_dumper` + `dump_cluster` fields, and **`bot_confidence` is a type fix**: previously typed `number | null` but the API always returned `null` due to a bug — it now returns the real value as a string enum `"none" | "low" | "medium" | "high" | null`. `TokenRiskInputs` gains `sniper_footprint` (slot-window snipe rollup: `buys`/`buyers`/`sol`/`supply_pct`/`sniper_wallet_buys`/`data_available`/`as_of`, or null) and `client.sniper.recent()` deploys each carry the same `footprint` block. New types: `WalletClassification`, `WalletBatchClassifyResponse`, `TokenTradesParams`, `TokenTrade`, `TokenTradesResponse`, `TokenTradesCoverage`, `SniperFootprint`, `BotConfidence`, `DumpClusterStats`.
+>
 > **New in 2.19.0** — **Verified wallet holdings.** `client.wallet.holdings(address, { limit?, min_value_usd? })` (`GET /wallet/{address}/holdings`) reads the wallet's actual current SPL + Token-2022 token accounts and SOL balance straight from chain, enriches each with our price/MC/name/symbol, and computes a `transfer_delta` (on-chain amount − trade-derived net position) — exposing tokens that arrived or left **without a swap** (airdrops, insider funding, wallet-hopping). Distinct from `client.wallet.positions()` (trade-derived FIFO): holdings is "what they actually hold right now". Returns `WalletHoldingsResponse` with a `summary` (`token_accounts`/`non_zero`/`returned`/`priced`/`total_value_usd`/`truncated`), `sol_balance`, and `verified_at`. `limit` 1–500 (default 200), `min_value_usd` ≥0 (default 0). **ULTRA only.** New types: `WalletHoldingsParams`, `WalletHoldingsResponse`, `Holding`.
 >
 > **New in 2.18.0** — **Bundle cohort intelligence.** `client.alpha.bundle(mint)` (`GET /tokens/{mint}/bundle`) surfaces the wallets that bought a token together — in one atomic transaction (`bundle_kind: "atomic_tx"`) or the same slot (`"same_slot"`) — and, headline first, how much of supply they still hold. The `bundle` summary block (returned on every tier) carries `held_pct_of_supply` (0–1 of total supply, HEADLINE), `bundle_kind`, `wallet_count`, `held_ratio`, `fully_exited`, `buy_volume`, and `tokens_held`. **Tier-gated:** BASIC/TRADER get the `bundle` block only (`wallets: []`); PRO adds the top-10 cohort wallets with flags (`held_ratio`, `has_sold`, `atomic`, `is_kol`); ULTRA returns the full cohort plus identity (`kol_name`, `win_rate`, `bot_confidence`) and per-wallet `tokens_held`. New types: `TokenBundleResponse`, `BundleSummary`, `BundleWallet`, `BundleKind`.
@@ -302,6 +304,8 @@ await client.sniper.removeFromWatchlist("7dEx...4pQ8");
 
 Detection is pre-execution, so payloads carry no MC/logs/balances — `confirmed_on_chain` is `"deshred"`. For **live** push (not polling), use the `sniper:deploy` webhook event or the `sniper:deploys` WebSocket channel. ~1–3% of detected deploys may abandon before settlement.
 
+**v2.20** — each deploy also carries a `footprint` block (`SniperFootprint | null`): the slot-window snipe rollup for slots [-1..+3] around the deploy — `buys`, `buyers`, `sol`, `supply_pct`, `sniper_wallet_buys`, `data_available`, `as_of`. `null` until the ~10-min settle window has passed (or when the mint is outside the pump.fun-pipeline write-gate) — absent, not zero.
+
 ---
 
 #### `client.kol.scoutLeaderboard(params?)` *(new in 2.8)*
@@ -508,7 +512,7 @@ Returns: `AlphaBuyerQualityResponse`
 
 #### `client.alpha.risk(mint)`
 
-Transparent 0–100 token rug-risk/safety score (higher = riskier). Returns a `band` (`safe`/`caution`/`danger`), an explainable `factors[]` array that sums into `risk_score`, and the raw `inputs` (mint/freeze authority revocation, liquidity USD + liquidity-to-MC ratio, transfer fee bps, Token-2022 flag, burn detection, launch cohort SOL + size, deployer bond rate + total deployed, KOL signal, blacklist status). PRO/ULTRA — BASIC receives HTTP 403.
+Transparent 0–100 token rug-risk/safety score (higher = riskier). Returns a `band` (`safe`/`caution`/`danger`), an explainable `factors[]` array that sums into `risk_score`, and the raw `inputs` (mint/freeze authority revocation, liquidity USD + liquidity-to-MC ratio, transfer fee bps, Token-2022 flag, burn detection, launch cohort SOL + size, deployer bond rate + total deployed, KOL signal, blacklist status). **v2.20:** `inputs` also carries `sniper_footprint` (`SniperFootprint | null`) — the slot-window snipe rollup (`buys`/`buyers`/`sol`/`supply_pct`/`sniper_wallet_buys`/`data_available`/`as_of`). Informational: it does not move the score; `null` when not yet computed. PRO/ULTRA — BASIC receives HTTP 403.
 
 ```ts
 const { risk_score, band, factors } = await client.alpha.risk("EPjFW...");
@@ -658,7 +662,7 @@ Per-wallet endpoints that work on **any** Solana wallet, not just curated KOLs. 
 
 #### `client.wallet.stats(address)`
 
-Aggregate stats over 90d plus cross-product flags (KOL / alpha / deployer). Includes enrichments: top traded tokens with realized PnL, trading style, deployer tier mix, recent trades. **v2.8** adds `derived` block: win rate, ROI, best/worst trade, biggest miss (token sold that later mooned), and AI-classified verdict.
+Aggregate stats over 90d plus cross-product flags (KOL / alpha / deployer). Includes enrichments: top traded tokens with realized PnL, trading style, deployer tier mix, recent trades. **v2.8** adds `derived` block: win rate, ROI, best/worst trade, biggest miss (token sold that later mooned), and AI-classified verdict. **v2.20** adds reputation flags to `flags`: `is_sniper`, `is_bundler` (lifetime), `is_dumper` (rolling 42d), and `dump_cluster` cohort stats — pump.fun-pipeline scoped, so `false` means "not observed", NOT verified clean. **v2.20 type fix:** `flags.bot_confidence` is a string enum (`"none" | "low" | "medium" | "high" | null`), not a number — the old `number | null` typing never matched a real value (the API returned `null` unconditionally due to a bug, now fixed).
 
 ```ts
 const { stats, flags, derived } = await client.wallet.stats("ASVz...ybJk");
@@ -753,6 +757,24 @@ Params:
 - `since` / `until` — Unix epoch seconds (default last 90d)
 
 Returns: `WalletTradesResponse` with `trades[]` + `next_cursor` + `has_more` + `filters` echo.
+
+---
+
+#### `client.wallet.batchClassify(wallets)` *(new in 2.20 — PRO+)*
+
+Bulk wallet reputation flags — 1–100 addresses in one request (`POST /wallet/batch/classify`). Each entry carries the same flag values as the `flags` block of `stats()`: `is_sniper`, `is_bundler`, `is_dumper`, `is_kol` + `kol_name`, `bot_confidence` (`"none"`/`"low"`/`"medium"`/`"high"` or null), and `dump_cluster` (`{ dump_cohorts, runner_cohorts, total_cohorts, as_of }` or null).
+
+**Semantics** — flags are pump.fun-pipeline scoped: `false` means the behavior was **not observed** by our pipeline, NOT that the wallet is verified clean. `is_bundler` is a lifetime flag; `is_dumper` is a rolling 42-day window.
+
+```ts
+const { wallets, as_of } = await client.wallet.batchClassify([buyerA, buyerB, buyerC]);
+for (const w of wallets) {
+  const tags = [w.is_sniper && "sniper", w.is_bundler && "bundler", w.is_dumper && "dumper", w.is_kol && `KOL ${w.kol_name}`].filter(Boolean);
+  console.log(`${w.address.slice(0, 8)}…  ${tags.join(" · ") || "clean-ish (not observed)"}  bot=${w.bot_confidence ?? "?"}`);
+}
+```
+
+Returns: `WalletBatchClassifyResponse` — `{ wallets: WalletClassification[], count, as_of }`.
 
 ---
 
@@ -992,6 +1014,33 @@ for (const t of tokens) {
 ```
 
 Returns: `TokenRiskBatchResponse` — `{ tokens: (TokenRiskResponse | TokenRiskBatchError)[], count }`
+
+---
+
+#### `client.token.trades(mint, params?)` *(new in 2.20 — PRO+)*
+
+Mint-scoped trade tape — every captured trade for a token, cursor-paginated newest first (`GET /tokens/{mint}/trades`). Each trade carries `tx_signature`, `wallet_address`, `action`, `sol_amount`, `token_amount`, `price_sol`/`price_usd`, `early_buyer_rank`, `slot`, `block_time`, `traded_at`. Unlike `client.wallet.trades()` (90-day default), the default window here is the **full history**.
+
+**Coverage honesty** — the tape starts 2026-04-12 and is pump.fun-pipeline scoped; the `coverage` block (`history_start`, `scope`) makes both visible on every response. Trades outside that pipeline are not on the tape.
+
+```ts
+let cursor: string | undefined;
+while (true) {
+  const page = await client.token.trades(mint, { limit: 500, cursor, action: "buy" });
+  for (const t of page.trades) processBuy(t);
+  if (!page.has_more) break;
+  cursor = page.next_cursor!;
+}
+```
+
+Params:
+- `limit` — 1-500, default 100
+- `cursor` — from `next_cursor` of previous response
+- `action` — `"buy"` or `"sell"`
+- `wallet` — filter to one wallet address
+- `since` / `until` — Unix epoch seconds (default: full history)
+
+Returns: `TokenTradesResponse` with `trades[]` + `next_cursor` + `has_more` + `filters` echo + `coverage`.
 
 ---
 
@@ -1322,6 +1371,21 @@ import type {
   WalletTrackerEvent,
   WalletTrackerTradesResponse,
   WalletTrackerSummaryResponse,
+
+  // Wallet classification (v2.20)
+  WalletClassification,
+  WalletBatchClassifyResponse,
+  BotConfidence,
+  DumpClusterStats,
+
+  // Token trade tape (v2.20)
+  TokenTradesParams,
+  TokenTrade,
+  TokenTradesResponse,
+  TokenTradesCoverage,
+
+  // Sniper footprint (v2.20)
+  SniperFootprint,
 
   // Streaming
   StreamToken,

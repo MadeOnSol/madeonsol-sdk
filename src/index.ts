@@ -1543,6 +1543,26 @@ export interface TokenRiskFactor {
   detail: string;
 }
 
+/** Slot-window snipe rollup for a token (v2.20) — buys landed in slots [-1..+3]
+ * around the deploy. `null` on the parent means the rollup hasn't been computed
+ * yet (deploys younger than the ~10-min settle window) or the mint is outside
+ * the pump.fun-pipeline write-gate — absent, not zero. */
+export interface SniperFootprint {
+  /** Buy count inside the snipe slot window. */
+  buys: number;
+  /** Distinct buyer wallets inside the window. */
+  buyers: number;
+  /** Total SOL spent inside the window. */
+  sol: number;
+  /** Share of token supply bought inside the window (%, or null when supply unknown). */
+  supply_pct: number | null;
+  /** How many of those buys came from wallets on the known-sniper list. */
+  sniper_wallet_buys: number;
+  /** False when the window fell outside our capture coverage — treat counts as unknown, not 0. */
+  data_available: boolean;
+  as_of: string;
+}
+
 export interface TokenRiskInputs {
   mint_authority_revoked: boolean | null;
   freeze_authority_revoked: boolean | null;
@@ -1557,6 +1577,8 @@ export interface TokenRiskInputs {
   deployer_total_deployed: number | null;
   kol_signal: string | null;
   is_blacklisted: boolean | null;
+  /** v2.20 — slot-window snipe rollup. Informational (does not move the score); null when not yet computed. */
+  sniper_footprint?: SniperFootprint | null;
   [key: string]: unknown;
 }
 
@@ -1770,6 +1792,64 @@ export interface TokenFlowResponse {
   trades_per_wallet: number;
 }
 
+// ─── Token trade tape (v2.20) ────────────────────────────────────────────────
+
+export interface TokenTradesParams {
+  /** 1–500, default 100. */
+  limit?: number;
+  /** Opaque cursor from `next_cursor` of a previous response. */
+  cursor?: string;
+  action?: "buy" | "sell";
+  /** Filter to a single wallet address. */
+  wallet?: string;
+  /** Unix epoch seconds — defaults to the full history (from `coverage.history_start`). */
+  since?: number;
+  /** Unix epoch seconds — default now. */
+  until?: number;
+}
+
+export interface TokenTrade {
+  tx_signature: string;
+  wallet_address: string;
+  action: "buy" | "sell";
+  sol_amount: number;
+  token_amount: number;
+  price_sol: number | null;
+  price_usd: number | null;
+  /** Rank among the token's earliest buyers (1 = first), or null. */
+  early_buyer_rank: number | null;
+  slot: number | null;
+  /** Solana block time (Unix seconds). */
+  block_time: number;
+  traded_at: string;
+}
+
+export interface TokenTradesFilters {
+  action: "buy" | "sell" | null;
+  wallet: string | null;
+  since: number;
+  until: number;
+}
+
+/** Honesty markers: where the tape starts and what pipeline captured it. */
+export interface TokenTradesCoverage {
+  /** Unix epoch seconds of the first captured trade — history starts 2026-04-12. */
+  history_start: number;
+  /** Capture scope, e.g. "pump.fun pipeline" — trades outside it are not on the tape. */
+  scope: string;
+}
+
+export interface TokenTradesResponse {
+  mint: string;
+  trades: TokenTrade[];
+  /** Pass as `cursor` on the next call. null when the end of the result set is reached. */
+  next_cursor: string | null;
+  has_more: boolean;
+  filters: TokenTradesFilters;
+  coverage: TokenTradesCoverage;
+  _rid?: string;
+}
+
 /** Payload of a `token:graduation` stream event — every pump.fun graduation
  * (bonding curve complete → PumpSwap migration), tracked deployer or not. */
 export interface GraduationEvent {
@@ -1811,19 +1891,75 @@ export interface WalletStats {
   window_days: number;
 }
 
+/** Bot-likelihood grade from the alpha classifier. Text enum — NOT a number. */
+export type BotConfidence = "none" | "low" | "medium" | "high";
+
+/** Rolling dump-cluster stats for a wallet (trailing 42 days, refreshed daily).
+ * A "dump cohort" is a first-20 buyer appearance on a token that peaked <15min
+ * after deploy. `null` on the parent means the wallet has no cohort record. */
+export interface DumpClusterStats {
+  dump_cohorts: number;
+  runner_cohorts: number;
+  total_cohorts: number;
+  as_of: string;
+}
+
 export interface WalletFlags {
   is_kol:   boolean;
   kol_name: string | null;
   /** True if the wallet exists in mv_alpha_wallets (≥1 early-buyer record). */
   is_alpha_tracked: boolean;
-  /** 0–1, higher = more bot-like. From the alpha classifier (migration 124). */
-  bot_confidence:      number | null;
+  /**
+   * Bot-likelihood grade from the alpha classifier.
+   * **v2.20 type fix (breaking-ish):** previously typed `number | null`, but the
+   * API always returned `null` due to a server bug. The bug is fixed and the
+   * real value is a STRING enum ("none"/"low"/"medium"/"high"), never a number.
+   */
+  bot_confidence:      BotConfidence | null;
   alpha_win_rate:      number | null;
   alpha_net_pnl_sol:   number | null;
   alpha_tokens_traded: number | null;
   is_deployer: boolean;
   deployer_tokens_deployed: number | null;
   deployer_bonding_rate:    number | null;
+  /** v2.20 — wallet appears on the known-sniper list. Pump.fun-pipeline scoped:
+   * `false` means "not observed", NOT verified clean. */
+  is_sniper?: boolean;
+  /** v2.20 — wallet appears on the bundler list (lifetime flag; never expires).
+   * Pump.fun-pipeline scoped: `false` = not observed, not verified clean. */
+  is_bundler?: boolean;
+  /** v2.20 — wallet is on the rolling-42d dump-cluster list (see `dump_cluster`
+   * for the underlying cohort counts). `false` = not observed. */
+  is_dumper?: boolean;
+  /** v2.20 — dump-cluster cohort stats behind `is_dumper`, or null when the
+   * wallet has no cohort record. */
+  dump_cluster?: DumpClusterStats | null;
+}
+
+// ─── Wallet batch classify (v2.20) ──────────────────────────────────────────
+
+/** One wallet's reputation flags in a batch-classify response. Values match the
+ * `flags` block of `GET /wallet/{address}` exactly. All flags are pump.fun-
+ * pipeline scoped — `false` means "not observed by our pipeline", NOT verified
+ * clean. `is_bundler` is a lifetime flag; `is_dumper` is rolling-42d. */
+export interface WalletClassification {
+  address: string;
+  is_sniper: boolean;
+  /** Lifetime flag — once a bundler, always flagged. */
+  is_bundler: boolean;
+  /** Rolling 42-day window — drops off when the behavior stops. */
+  is_dumper: boolean;
+  is_kol: boolean;
+  kol_name: string | null;
+  bot_confidence: BotConfidence | null;
+  dump_cluster: DumpClusterStats | null;
+}
+
+export interface WalletBatchClassifyResponse {
+  wallets: WalletClassification[];
+  count: number;
+  as_of: string;
+  _rid?: string;
 }
 
 // v1.8.1 enrichments — additive, nullable. Old SDK consumers ignoring these
@@ -2990,6 +3126,35 @@ class TokenClient {
   }
 
   /**
+   * v2.20 — Mint-scoped trade tape: every captured trade for a token, cursor-
+   * paginated (newest first). Filter by `action`, `wallet`, and a `since`/`until`
+   * Unix-seconds window — the default window is the FULL history (unlike
+   * `client.wallet.trades()`, which defaults to 90 days).
+   *
+   * **Coverage honesty:** the tape starts 2026-04-12 and is pump.fun-pipeline
+   * scoped — `coverage.history_start` + `coverage.scope` make both visible per
+   * call. Trades outside that pipeline are not on the tape. **PRO+**.
+   * @param mint Token mint address (base58).
+   * @example
+   * ```ts
+   * let cursor: string | undefined;
+   * while (true) {
+   *   const page = await client.token.trades(mint, { limit: 500, cursor, action: "buy" });
+   *   for (const t of page.trades) processBuy(t);
+   *   if (!page.has_more) break;
+   *   cursor = page.next_cursor!;
+   * }
+   * ```
+   */
+  trades(mint: string, params?: TokenTradesParams): Promise<TokenTradesResponse> {
+    return this._fetch(buildUrl(
+      this._baseUrl,
+      `/tokens/${encodeURIComponent(mint)}/trades`,
+      params as Record<string, string | number | undefined>,
+    ));
+  }
+
+  /**
    * v1.9 — KOL consensus on a token: how many KOLs bought/sold, exit rate,
    * net flow, median entry MC. ULTRA gets individual wallet arrays.
    */
@@ -3198,6 +3363,10 @@ export interface SniperDeploy {
   /** "deshred" — detection is pre-execution, so the payload carries no MC/logs/balances. */
   confirmed_on_chain: boolean | null;
   confirmed_at: string | null;
+  /** v2.20 — slot-window snipe rollup for this deploy (slots [-1..+3]). `null`
+   * until the ~10-min settle window has passed or when the mint is outside the
+   * pump.fun-pipeline write-gate — absent, not zero. */
+  footprint?: SniperFootprint | null;
 }
 
 export interface SniperRecentParams {
@@ -3317,8 +3486,31 @@ class SniperClient {
 class WalletClient {
   constructor(
     private readonly _get: <T>(url: string) => Promise<T>,
+    private readonly _post: <T>(url: string, body?: unknown) => Promise<T>,
     private readonly _baseUrl: string,
   ) {}
+
+  /**
+   * v2.20 — Bulk wallet reputation flags for 1–100 addresses in one request
+   * (`POST /wallet/batch/classify`). Each entry carries the same flag values as
+   * the `flags` block of `stats()`: `is_sniper`, `is_bundler` (lifetime),
+   * `is_dumper` (rolling 42d), `is_kol` + `kol_name`, `bot_confidence`
+   * ("none"/"low"/"medium"/"high" string enum), and the `dump_cluster` cohort
+   * stats behind `is_dumper`.
+   *
+   * **Semantics:** flags are pump.fun-pipeline scoped — `false` means the
+   * behavior was not observed by our pipeline, NOT that the wallet is verified
+   * clean. **PRO+**.
+   * @param wallets 1–100 Solana wallet addresses (base58).
+   * @example
+   * ```ts
+   * const { wallets } = await client.wallet.batchClassify([buyerA, buyerB]);
+   * const flagged = wallets.filter(w => w.is_sniper || w.is_dumper);
+   * ```
+   */
+  batchClassify(wallets: string[]): Promise<WalletBatchClassifyResponse> {
+    return this._post(`${this._baseUrl}/wallet/batch/classify`, { wallets });
+  }
 
   /**
    * Aggregate stats for any wallet over the last 90 days, plus cross-product
@@ -3884,7 +4076,7 @@ export class MadeOnSol {
     this.stream = new StreamClient(boundGet, boundPost, boundDelete, this._baseUrl);
     this.webhooks = new WebhookClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
     this.walletTracker = new WalletTrackerClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
-    this.wallet = new WalletClient(boundGet, this._baseUrl);
+    this.wallet = new WalletClient(boundGet, boundPost, this._baseUrl);
     this.coordinationAlerts = new CoordinationAlertsClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
     this.firstTouchSubscriptions = new FirstTouchSubscriptionsClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
     this.priceAlerts = new PriceAlertsClient(boundGet, boundPost, boundPatch, boundDelete, this._baseUrl);
@@ -3893,7 +4085,7 @@ export class MadeOnSol {
   }
 
   private _headers(): Record<string, string> {
-    return { Authorization: `Bearer ${this._apiKey}`, Accept: "application/json", "User-Agent": "madeonsol-sdk/2.15.0" };
+    return { Authorization: `Bearer ${this._apiKey}`, Accept: "application/json", "User-Agent": "madeonsol-sdk/2.20.0" };
   }
 
   /**
