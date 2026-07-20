@@ -78,15 +78,21 @@ interface WebSocketLike {
 
 async function resolveWebSocket(override?: unknown): Promise<new (url: string) => WebSocketLike> {
   if (override) return override as never;
-  const g = (globalThis as { WebSocket?: unknown }).WebSocket;
-  if (g) return g as never;
+  // Prefer the `ws` package in Node: it exposes terminate() for an immediate
+  // socket teardown, so close() lets short-lived processes exit. The global
+  // (undici) WebSocket on Node 22+ keeps its TLS socket open after close() —
+  // it has no terminate() and no reachable socket handle — which hangs the
+  // event loop. In the browser this import rejects and we fall back to the
+  // platform's native WebSocket.
   try {
     const mod = (await import("ws" as string)) as { default?: unknown; WebSocket?: unknown };
     const impl = mod.default ?? mod.WebSocket;
     if (impl) return impl as never;
   } catch {
-    /* fall through */
+    /* not Node, or `ws` not installed — fall back to the platform WebSocket */
   }
+  const g = (globalThis as { WebSocket?: unknown }).WebSocket;
+  if (g) return g as never;
   throw new Error(
     "No WebSocket implementation available. On Node < 22, install `ws` (npm i ws) or pass { WebSocketImpl }.",
   );
@@ -193,8 +199,15 @@ export class MadeOnSolStream {
     this.closedByUser = true;
     if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
     this.clearHeartbeat();
-    try { this.ws?.close(1000, "client closed"); } catch { /* ignore */ }
+    const sock = this.ws as (WebSocketLike & { terminate?: () => void }) | null;
     this.ws = null;
+    try {
+      // `ws` package: terminate() destroys the underlying socket immediately so
+      // the process can exit. Native/undici WebSocket has no terminate() — fall
+      // back to a graceful close().
+      if (typeof sock?.terminate === "function") sock.terminate();
+      else sock?.close(1000, "client closed");
+    } catch { /* ignore */ }
   }
 
   private sendSubscribe(): void {
