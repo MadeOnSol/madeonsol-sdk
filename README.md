@@ -10,7 +10,7 @@
 > ⭐ **[Star on GitHub](https://github.com/madeonsol/madeonsol-sdk)** if you find this useful · 📂 **[Examples](./examples/)** · 📚 **[API docs](https://madeonsol.com/api-docs)**
 
 Official TypeScript/JavaScript SDK for the **[MadeOnSol](https://madeonsol.com) Solana API** — zero dependencies, fully typed, works in Node.js ≥ 18 and edge runtimes.
-> Real-time Solana trading intelligence: track 1,069 KOL wallets with <3s latency, score 23,000+ Pump.fun deployers, surface deshred deploy signals **~500ms before on-chain confirmation**, detect multi-KOL coordination, score token rug-risk 0–100 with a transparent factor breakdown, expose the bundle cohort that bought a token together and how much of supply it still holds, verify any wallet's current on-chain holdings with airdrop/insider `transfer_delta` detection, push every pump.fun graduation the second it bonds, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day at [madeonsol.com/pricing](https://madeonsol.com/pricing) — no credit card required.
+> Real-time Solana trading intelligence: track 1,069 KOL wallets with <3s latency, score 23,000+ Pump.fun deployers, surface deshred deploy signals **~500ms before on-chain confirmation**, detect multi-KOL coordination, score token rug-risk 0–100 with a transparent factor breakdown, expose the bundle cohort that bought a token together and how much of supply it still holds, verify any wallet's current on-chain holdings with airdrop/insider `transfer_delta` detection, push every pump.fun graduation the second it bonds, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day, every endpoint — no signup payment. Get a key at [madeonsol.com/pricing](https://madeonsol.com/pricing).
 
 > **New in 2.22.0** — **Clean stream shutdown.** `client.stream.connect().close()` now fully tears down the underlying WebSocket so short-lived scripts exit promptly instead of hanging on a lingering socket. In Node the client now prefers the `ws` package (which exposes `terminate()`) and hard-terminates on close; the browser still uses the native WebSocket. No API changes — purely a lifecycle fix. (If you don't already depend on `ws` and want the fast exit on Node ≥22, `npm i ws`.)
 >
@@ -1415,6 +1415,7 @@ import type {
 
 - [MadeOnSol website](https://madeonsol.com) — Browse 950+ Solana tools
 - [API documentation](https://madeonsol.com/api-docs) — Interactive endpoint reference
+- [Pricing & API keys](https://madeonsol.com/pricing) — Free tier: 200 requests/day, no signup payment
 - [MadeOnSol on GitHub](https://github.com/madeonsol/madeonsol) — Main project repository
 
 ## Also Available
