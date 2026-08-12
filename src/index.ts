@@ -1490,6 +1490,8 @@ export interface AlphaCapTableResponse {
   mint: string;
   buyers: AlphaCapTableBuyer[];
   summary: AlphaCapTableSummary;
+  /** v2.22.4 — trade-coverage disclosure (additive; absent on older cached responses). */
+  coverage?: TradeCoverage;
 }
 
 export interface AlphaBuyerQualityBreakdown {
@@ -1523,6 +1525,8 @@ export interface AlphaBuyerQualityResponse {
   /** Returned on all tiers. */
   breakdown?: AlphaBuyerQualityBreakdown;
   note?: string;
+  /** v2.22.4 — trade-coverage disclosure (additive; absent on older cached responses). */
+  coverage?: TradeCoverage;
 }
 
 // ─── Token risk score (v2.13) ──────────────────────────────────────────────
@@ -1635,6 +1639,10 @@ export interface TokenRiskResponse {
   /** v2.21 — deployer self-activity block (single-mint `/risk` only; absent on
    * batch items). `null` when the mint has no tracked deploy row. */
   dev?: TokenRiskDev | null;
+  /** v2.22.4 — trade-coverage disclosure (single-mint `/risk` only). Its `note`
+   * names the split: trade-derived sub-fields are launchpad-pipeline scoped,
+   * on-chain sub-fields are unaffected by trade coverage. */
+  coverage?: TradeCoverage;
 }
 
 /** Per-mint error entry in a batch-risk response. Untracked mints come back as
@@ -1718,6 +1726,8 @@ export interface TokenBundleResponse {
   mint: string;
   bundle: BundleSummary;
   wallets: BundleWallet[];
+  /** v2.22.4 — trade-coverage disclosure (additive; absent on older cached responses). */
+  coverage?: TradeCoverage;
 }
 
 /** One DEX pool a token trades in. `is_active` distinguishes live pools from
@@ -1831,6 +1841,9 @@ export interface TokenFlowResponse {
   /** buy_sol − sell_sol — the net SOL flow. */
   net_sol: number;
   trades_per_wallet: number;
+  /** v2.22.4 — trade-coverage disclosure; when `in_scope` is false the zero
+   * counts mean "not covered", not "no activity". */
+  coverage?: TradeCoverage;
 }
 
 // ─── Token trade tape (v2.20) ────────────────────────────────────────────────
@@ -1872,13 +1885,26 @@ export interface TokenTradesFilters {
   until: number;
 }
 
-/** Honesty markers: where the tape starts and what pipeline captured it. */
-export interface TokenTradesCoverage {
+/** Honesty markers: where the tape starts and what pipeline captured it.
+ * v2.22.4 — also returned (as an optional `coverage` block) on bundle, risk,
+ * flow, cap-table, buyer-quality and the wallet stats/pnl/positions/holdings/
+ * trades endpoints, with the new `in_scope` probe. */
+export interface TradeCoverage {
   /** Unix epoch seconds of the first captured trade — history starts 2026-04-12. */
   history_start: number;
   /** Capture scope, e.g. "pump.fun pipeline" — trades outside it are not on the tape. */
   scope: string;
+  /** v2.22.4 — `true` = we hold persisted trades for this mint/wallet · `false` =
+   * the subject sits outside the launchpad write-gate (read zeros as "not
+   * covered", NOT "no activity") · `null` = coverage probe unavailable. */
+  in_scope?: boolean | null;
+  /** Present when `in_scope` is `false`/`null` (and always on `/risk`) —
+   * human-readable explanation of what the coverage gap means. */
+  note?: string;
 }
+
+/** Back-compat alias — the honesty block is no longer trades-specific. */
+export type TokenTradesCoverage = TradeCoverage;
 
 export interface TokenTradesResponse {
   mint: string;
@@ -2068,6 +2094,10 @@ export interface WalletFlags {
   /** v2.20 — dump-cluster cohort stats behind `is_dumper`, or null when the
    * wallet has no cohort record. */
   dump_cluster?: DumpClusterStats | null;
+  /** v2.22.4 — semantics reminder carried in-band: `is_sniper`/`is_bundler`/
+   * `is_dumper` are launchpad-pipeline scoped, so `false` means "not observed
+   * in covered trades", not "verified clean". */
+  coverage_note?: string;
 }
 
 // ─── Wallet batch classify (v2.20) ──────────────────────────────────────────
@@ -2198,6 +2228,9 @@ export interface WalletStatsResponse {
   recent_trades?:      WalletRecentTrade[];
   /** Derived analytics: win rate, ROI, best/worst trade, biggest miss, verdict (v1.9+). */
   derived?:            WalletDerivedStats;
+  /** v2.22.4 — trade-coverage disclosure; when `in_scope` is false an empty
+   * `stats` block means "outside the write-gate", not "never traded". */
+  coverage?: TradeCoverage;
   _rid?: string;
 }
 
@@ -2285,6 +2318,9 @@ export interface WalletPnlResponse {
   computed_at?: string;
   /** Only present on cache misses — TTL for this row in wallet_analyses. */
   ttl_seconds?: number;
+  /** v2.22.4 — trade-coverage disclosure; `in_scope: false` means the PnL is
+   * built from zero covered trades, not that the wallet never traded. */
+  coverage?: TradeCoverage;
   _rid?: string;
 }
 
@@ -2294,6 +2330,8 @@ export interface WalletPositionsResponse {
   cache_hit?: boolean;
   computed_at?: string | null;
   ttl_seconds?: number | null;
+  /** v2.22.4 — trade-coverage disclosure (additive). */
+  coverage?: TradeCoverage;
   _rid?: string;
 }
 
@@ -2342,6 +2380,10 @@ export interface WalletHoldingsResponse {
   trade_window_days: number;
   cache_hit: boolean;
   ttl_seconds: number;
+  /** v2.22.4 — trade-coverage disclosure for the trade-derived enrichments
+   * (`transfer_delta`, cost-basis fields); the holdings themselves are live
+   * on-chain reads and unaffected. */
+  coverage?: TradeCoverage;
 }
 
 export interface WalletTradesParams {
@@ -2382,6 +2424,9 @@ export interface WalletTradesResponse {
   next_cursor: string | null;
   has_more: boolean;
   filters: WalletTradesFilters;
+  /** v2.22.4 — trade-coverage disclosure; an empty tape with `in_scope: false`
+   * means "outside the write-gate", not "never traded". */
+  coverage?: TradeCoverage;
   _rid?: string;
 }
 
