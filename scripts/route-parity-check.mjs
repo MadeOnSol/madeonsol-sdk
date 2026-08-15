@@ -45,10 +45,22 @@ function walk(dir) {
 }
 
 const STR = /"([^"]*)"|`([^`]*)`/g;
+
+/**
+ * Blank out /* … *\/ comment bodies, keeping newlines so line numbers stay true.
+ *
+ * Without this the extractor reads JSDoc prose as code and flags backtick code
+ * spans like `/risk` as SDK paths — three such false positives on this repo made
+ * the gate permanently red, which is worse than not having a gate at all.
+ */
+function stripBlockComments(src) {
+  return src.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
+}
+
 const problems = [];
 let count = 0;
 for (const file of walk(SRC)) {
-  readFileSync(file, "utf8")
+  stripBlockComments(readFileSync(file, "utf8"))
     .split("\n")
     .forEach((line, i) => {
       for (const m of line.matchAll(STR)) {
