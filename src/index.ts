@@ -1868,8 +1868,25 @@ export interface TokenTrade {
   action: "buy" | "sell";
   sol_amount: number;
   token_amount: number;
+  /** THIS TRADE's executed price: `sol_amount / token_amount`, so it reconciles
+   *  exactly with the amounts on the same row and with the PnL endpoints. Since
+   *  `sol_amount` is the wallet's net SOL movement, this is the trader's all-in
+   *  effective rate — swap fee and any account rent included — not the pool mid.
+   *  `null` for dust and zero-SOL legs (a rugged sell that recovered nothing).
+   *
+   *  Changed 2026-08-16: previously carried the canonical pool price, which
+   *  disagreed with the row's own amounts by a 7.9% median (p90 ~74%). That
+   *  value now lives in {@link TokenTrade.market_price_sol}. */
   price_sol: number | null;
+  /** {@link TokenTrade.price_sol} in USD at the trade's SOL/USD rate. */
   price_usd: number | null;
+  /** The market-cap tracker's canonical pool price sampled near this trade's
+   *  slot — one value per token per update, so every trade in the same slot
+   *  shares it. Use for a per-token price series independent of trade size and
+   *  direction; use `price_sol` for cost basis, fills and PnL. */
+  market_price_sol: number | null;
+  /** {@link TokenTrade.market_price_sol} in USD. */
+  market_price_usd: number | null;
   /** Rank among the token's earliest buyers (1 = first), or null. */
   early_buyer_rank: number | null;
   slot: number | null;
@@ -2406,6 +2423,15 @@ export interface WalletTrade {
   action: "buy" | "sell";
   sol_amount:   number;
   token_amount: number;
+  /** This trade's executed price — `sol_amount / token_amount`. Added 2026-08-16;
+   *  this route returned amounts and no price before. See {@link TokenTrade}. */
+  price_sol:        number | null;
+  /** {@link WalletTrade.price_sol} in USD. */
+  price_usd:        number | null;
+  /** Canonical pool price near this trade's slot — NOT this trade's price. */
+  market_price_sol: number | null;
+  /** {@link WalletTrade.market_price_sol} in USD. */
+  market_price_usd: number | null;
   block_time:   number;
   traded_at:    string;
 }
