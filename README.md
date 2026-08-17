@@ -12,6 +12,8 @@
 Official TypeScript/JavaScript SDK for the **[MadeOnSol](https://madeonsol.com) Solana API** — zero dependencies, fully typed, works in Node.js ≥ 18 and edge runtimes.
 > Real-time Solana trading intelligence: track 1,069 KOL wallets with <3s latency, score 23,000+ Pump.fun deployers, surface deshred deploy signals **~500ms before on-chain confirmation**, detect multi-KOL coordination, score token rug-risk 0–100 with a transparent factor breakdown, expose the bundle cohort that bought a token together and how much of supply it still holds, verify any wallet's current on-chain holdings with airdrop/insider `transfer_delta` detection, push every pump.fun graduation the second it bonds, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day, every endpoint — no signup payment. Get a key at [madeonsol.com/pricing](https://madeonsol.com/pricing).
 
+> **New in 2.25.0 — token locks & vesting, upcoming unlocks, and pump.fun creator-fee sharing / fee claims — five endpoints + two live channels.** `client.token.locks(mint, params?)` (typed `TokenLocksResponse`) binds `GET /tokens/{mint}/locks`: every on-chain Streamflow / Jupiter Lock / Bonfida lock or vesting contract on a mint, decoded from the locker programs' account state, with a LIVE-derived view (`locked_raw` still locked, `unlocked`, `withdrawn`, `claimable`, `status`, `next_unlock`) and a `summary` (locked / deposited totals, the 7d / 30d forward unlock schedule, `active_cancelable_by_sender` — a lock the sender can cancel is a weaker promise). `client.token.locksFeed(params?)` (`GET /tokens/locks`) is the cross-token feed of NEW contracts, cursor-paginated (`pagination.next_since` / `next_before`) and pushed live on the new **`token:locks`** WS channel (event `token:lock`, typed `TokenLockStreamEvent`). `client.token.unlocks(params?)` (`GET /tokens/unlocks`) lists upcoming unlock EVENTS (cliff / period / final / tranche) inside `within=1h…90d` with `window_amount_*` per contract. `client.token.feeShares(mint)` (`GET /tokens/{mint}/fee-shares`) decodes a pump.fun coin's on-chain `SharingConfig` — who its creator fees are redirected to (`share_bps`, `is_admin`, `is_social_pda` for fees earmarked for an X account etc., `redirected_bps`, `social_bps`, `is_default` = 100% to the creator) plus the distribution rollup per recipient and the config change log; `client.token.feeClaims(params?)` (`GET /tokens/fee-claims`) is the fee-event feed (`distribution` with per-address `payouts[]`, `social_claim`, `shares_created` / `updated` / `reset`, `creator_transferred`, `creator_claim` on request), pushed live on the new **`token:fee_claims`** channel (event `token:fee_claim`, typed `TokenFeeClaimStreamEvent`). Honest limits: base-unit amounts are **strings** and ui / usd / pct are `null` when decimals or price are unknown; **LP locks are NOT included** (token / vesting locks only); **fee-event history starts 2026-08-17**; all five are **PRO+** (BASIC receives HTTP 403) on the keyed `msk_` API.
+
 > **New in 2.24.0 — live holder census: exact holder count, labelled holders, and pools that are named, not just excluded.** `client.alpha.holders(mint)` (typed `TokenHoldersResponse`) binds `GET /tokens/{mint}/holders` (PRO+): every token account of the mint read from the ledger at `confirmed` and merged per owner, so `concentration.holder_count` is EXACT (distinct non-zero owners minus pools / bonding curves / burns) — never a trade-derived estimate; it is `null` only when the provider refuses the census for a mega-cap, in which case you get the top-20 view and `source.census_fallback_reason` says so. Each disclosed owner carries our labels (`deployer` / `kol` / `early_buyer` / `bundle` / `bot` / `dump_cluster` — empty means unknown to us, not clean), and `excluded[]` NAMES what was taken out of the circulating denominator: `reason` = `pool` (with `dex` + `pool_address`), `bonding_curve` (pump.fun / LaunchLab), `burn`, or `program_account` only when we genuinely cannot attribute the PDA; `pool_pct` / `burned_pct` / `program_pct` split the exclusion. Amounts are raw u64 **strings**. Disclosure: PRO ranks 1–10, ULTRA 1–50, BUSINESS 1–100 — the maths is tier-independent. Big tokens take 5–30 s upstream: you get `503 holder_scan_in_progress` with `retry_after_seconds: 20` while the scan finishes into the cache, and the retry is instant.
 
 > **New in 2.23.0 — two prices on the trade tape, and the right one is now the default.** The trade tape now tells you what a trade actually cost. `price_sol`/`price_usd` on each trade are THIS trade's executed price — `sol_amount / token_amount`, reconciling exactly with the amounts on the same row and with the PnL endpoints. Because `sol_amount` is the wallet's net SOL movement, that is the trader's all-in effective rate: swap fee and any account rent included, not the pool mid. The market-cap tracker's canonical pool price moved to the new **`market_price_sol`/`market_price_usd`** fields — sampled once per token per pool update, so every trade in the same slot shares it. Until now `price_sol` carried that canonical value and disagreed with the row's own amounts by a **7.9% median** (p90 ~74%): a stale market price reads low in a pump and high in a dump, so anything you averaged out of the tape inherited the bias instead of cancelling it. Use `price_sol` for cost basis, fills and PnL; `market_price_sol` for a per-token series independent of trade size and direction. Both `client.alpha.tokenTrades(mint)` and `client.wallet.trades(address)` carry all four fields on `TokenTrade` / `WalletTrade` — the wallet tape returned amounts and no price at all before.
@@ -1089,6 +1091,94 @@ Returns: `TokenTradesResponse` with `trades[]` + `next_cursor` + `has_more` + `f
 
 ---
 
+#### `client.token.locks(mint, params?)` *(new in 2.25 — PRO+)*
+
+Token locks & vesting on a mint (`GET /tokens/{mint}/locks`) — every on-chain **Streamflow** stream, **Jupiter Lock** vesting escrow and **Bonfida** token-vesting contract, decoded from the locker programs' account state. Each row carries the schedule (`start_at` / `cliff_at` / `period_seconds` / `end_at`, `cliff_amount`, `amount_per_period`), the terms (`cancelable_by_sender` — funds are locked against the *recipient*, not the locker; `cancelable_by_recipient`, `transferable`, `can_topup`) and a **live-derived** view computed at request time: `locked_raw` (still locked now), `unlocked`, `withdrawn`, `claimable`, `status` (active / completed / cancelled / closed) and `next_unlock` (cliff | period | final | tranche). `summary` rolls up `lock_count`, `active_count`, `by_program` / `by_kind`, `distinct_lockers`, locked / deposited totals (raw + ui + usd + % of supply), `unlocking_7d_*` / `unlocking_30d_*`, the nearest `next_unlock` and `active_cancelable_by_sender`. **PRO+** — BASIC receives HTTP 403.
+
+- `*_raw` amounts are base-unit **strings** — never floats; use `BigInt()`. `amount` / `locked` / `*_usd` / `*_pct_of_supply` are `null` when decimals or price are unknown (`token.facts_resolved`).
+- **LP locks are NOT included** — this is token / vesting locks only.
+- `status` / `program` narrow `locks[]` only; `summary` always covers every contract on the mint (`summary.complete` is false past 5000 contracts — totals then cover the newest 5000).
+- `created_at_estimated: true` marks a backfilled Jupiter Lock row with no on-chain creation time.
+
+```ts
+const { summary, locks } = await client.token.locks(mint, { status: "active" });
+console.log(`${summary.locked_pct_of_supply}% of supply locked · ${summary.unlocking_7d_usd} USD unlocks in 7d`);
+console.log(`${summary.active_cancelable_by_sender} active locks the locker can still cancel`);
+for (const l of locks) console.log(l.program, l.kind, BigInt(l.locked_raw), "until", l.end_at, l.cancelable_by_sender ? "(cancelable)" : "");
+```
+
+Params: `status` (active | completed | cancelled | closed), `program` (streamflow | jupiter_lock | bonfida_vesting), `limit` (1–500, default 200).
+
+Returns: `TokenLocksResponse` (`TokenLock`, `TokenLocksSummary`, `TokenLockNextUnlock`, `TokenLockToken`, `TokenLockProgram`, `TokenLockKind`, `TokenLockStatus`, `TokenUnlockEventKind`)
+
+---
+
+#### `client.token.locksFeed(params?)` *(new in 2.25 — PRO+)*
+
+Cross-token feed of **new** lock / vesting contracts, newest first (`GET /tokens/locks`) — who just locked tokens, of what mint, how much, until when. Rows are the same live-derived contract as `locks()` plus `token` (`symbol`, `decimals`, `price_usd`, `market_cap_usd`). Poll with `since = pagination.next_since`, page back with `before = pagination.next_before`, or subscribe to the **`token:locks`** WS channel (event `token:lock`) for a push the moment the contract lands on-chain. `min_usd` / `min_pct_of_supply` / `status` post-filter (×4 over-fetch, so a page may be shorter than `limit`). Backfilled Jupiter Lock rows are excluded unless `include_estimated: true`. **LP locks are NOT included.** **PRO+**.
+
+```ts
+let since: string | undefined;
+for (;;) {
+  const page = await client.token.locksFeed({ since, min_usd: 10_000 });
+  for (const l of page.locks) console.log(l.token.symbol, l.amount_usd, "USD locked until", l.end_at, "by", l.sender);
+  since = page.pagination.next_since ?? since;
+  await new Promise((r) => setTimeout(r, 30_000));
+}
+```
+
+Params: `since` / `before` (ISO date-time cursors), `mint`, `sender`, `recipient`, `program`, `kind` (lock | vesting), `status`, `min_usd`, `min_pct_of_supply` (0–100), `include_estimated` (boolean), `limit` (1–100, default 50).
+
+Returns: `TokenLocksFeedResponse` (`TokenLockFeedEntry`, `TokenFeedPagination`, `TokenFeedStreamPointer`)
+
+---
+
+#### `client.token.unlocks(params?)` *(new in 2.25 — PRO+)*
+
+Upcoming **unlock events** across all active lock / vesting contracts inside a window (`GET /tokens/unlocks`) — which tokens have locked supply hitting the market, how much, from whose lock. One entry per active contract = its **next** unlock event in the window (`event`: cliff | period | final | tranche) with `unlock_at` / `in_seconds` / `amount_*`, plus `window_amount_*` = that contract's total release over the whole window, the mint's `token` facts and the parent `lock` (subset of the `locks()` row). Continuous per-second streams (Streamflow payroll) contribute only their cliff / final events. **LP locks are NOT included.** **PRO+**.
+
+```ts
+const { window, unlocks } = await client.token.unlocks({ within: "24h", sort: "largest_usd", min_usd: 50_000 });
+console.log(window.from, "→", window.to);
+for (const u of unlocks) console.log(u.token.symbol, u.event, u.amount_usd, "USD in", u.in_seconds, "s —", u.lock.program, u.lock.sender);
+```
+
+Params: `within` (1h | 6h | 24h | 3d | 7d (default) | 14d | 30d | 90d), `mint`, `program`, `kind`, `min_usd`, `min_pct_of_supply`, `sort` (soonest (default) | largest_usd | largest_pct), `limit` (1–200, default 50).
+
+Returns: `TokenUnlocksResponse` (`TokenUnlockEvent`, `TokenUnlocksWithin`)
+
+---
+
+#### `client.token.feeShares(mint)` *(new in 2.25 — PRO+)*
+
+pump.fun **creator-fee sharing** on a coin (`GET /tokens/{mint}/fee-shares`) — who its creator fees are redirected to. Decodes the on-chain `SharingConfig` (pump_fees PDA `["sharing-config", mint]`): `admin`, `status`, each shareholder's `share_bps` / `share_pct` with `is_admin` and `is_social_pda` (a SocialFeePda holds fees earmarked for a platform identity — `social.platform` 2 = X, `social.user_id` is the platform-native numeric id, **not** the handle — with `lifetime_claimed`), `redirected_bps` (share going to non-admin addresses), `social_bps` and `is_default` (100% to the creator — a real answer: pump creates one config per coin). Plus `distributions` (every `distribute_creator_fees` payout, pro-rata per shareholder; per-recipient `received_*` totals; `past_recipients` no longer in the split), `history` (config created / updated / reset, creator transferred) and `recent_distributions`. `config.source` is `"stream"` (our table — only non-default configs are stored) or `"chain"` (live PDA read; `config_error` set and `config` null if every RPC endpoint failed). Amounts are quote base units (SOL lamports unless a stable-quoted coin) as **strings**. **Event / distribution history starts 2026-08-17.** **PRO+**.
+
+```ts
+const fs = await client.token.feeShares(mint);
+if (fs.config?.is_default) console.log("100% of creator fees go to the creator");
+else for (const s of fs.config?.shareholders ?? []) console.log(s.address, s.share_pct, "%", s.social?.platform_label ?? "", "received", s.received_usd, "USD");
+console.log(fs.distributions.count, "distributions,", fs.distributions.total_usd, "USD since 2026-08-17");
+```
+
+Returns: `TokenFeeSharesResponse` (`TokenFeeSharingConfig`, `TokenFeeShareholder`, `TokenFeeSocialIdentity`, `TokenFeeShareHistoryEntry`, `TokenFeeDistribution`, `TokenFeeShareEntry`)
+
+---
+
+#### `client.token.feeClaims(params?)` *(new in 2.25 — PRO+)*
+
+pump.fun **fee-event feed**, newest first (`GET /tokens/fee-claims`). `type`s: `distribution` (creator fees paid out pro-rata to the SharingConfig shareholders — fees redirected to others — with `payouts[]` per address), `social_claim` (fees earmarked for a platform identity — 2 = X — claimed to a `recipient` wallet), `shares_created` / `shares_updated` / `shares_reset` (config changes), `creator_transferred`, and `creator_claim` (the plain creator vault claim — per creator, carries **no mint**; excluded unless you ask for it via `type`). Default 100%-to-creator configs and zero-amount distributions are not stored. Poll with `since = pagination.next_since` or subscribe to the **`token:fee_claims`** WS channel (event `token:fee_claim`). Amounts are quote base units as **strings** + `amount` / `amount_usd`. **History starts 2026-08-17.** **PRO+**.
+
+```ts
+const { events } = await client.token.feeClaims({ type: "distribution,social_claim", min_sol: 1 });
+for (const e of events) console.log(e.type, e.mint, e.amount, e.quote, e.recipient ?? `${e.payouts?.length} payouts`);
+```
+
+Params: `type` (comma list), `mint`, `recipient`, `actor`, `social_platform` (2 = X), `social_user_id`, `min_sol`, `since` / `before` (ISO date-time cursors), `limit` (1–100, default 50).
+
+Returns: `TokenFeeClaimsResponse` (`TokenFeeClaimEvent`, `TokenFeePayout`, `TokenFeeEventType`, `TokenFeedPagination`, `TokenFeedStreamPointer`)
+
+---
+
 ### Account — `client.me()` *(new in 2.6)*
 
 Inspect your tier, quota state, and feature usage in one call. Reads from the same in-memory counters that drive rate-limit enforcement, so `quota.daily.remaining` is authoritative — no header parsing needed. Works on every tier (BASIC/PRO/ULTRA).
@@ -1167,7 +1257,7 @@ stream.subscribe(["kol:trades", "deployer:alerts"]);
 // stream.unsubscribe([...]) / stream.close() when done
 ```
 
-Channels: `kol:trades`, `kol:coordination`, `kol:first_touches`, `deployer:alerts`, `wallet_tracker:events`, `copytrade:signals`, `price_alert:events`, `sniper:deploys`, `token:graduations` (every pump.fun graduation in real time, tracked deployer or not — typed `GraduationEvent`). Lifecycle: `open`, `close`, `reconnect`, `heartbeat`, `error`. Node 22+ uses the global `WebSocket`; on Node < 22 also `npm i ws`.
+Channels: `kol:trades`, `kol:coordination`, `kol:first_touches`, `deployer:alerts`, `wallet_tracker:events`, `copytrade:signals`, `price_alert:events`, `sniper:deploys`, `token:graduations` (every pump.fun graduation in real time, tracked deployer or not — typed `GraduationEvent`), `token:locks` (**new 2.25** — event `token:lock` for every NEW Streamflow / Jupiter Lock / Bonfida lock or vesting contract, typed `TokenLockStreamEvent`; PRO+; updates are not pushed — poll `client.token.locks()`), `token:fee_claims` (**new 2.25** — event `token:fee_claim` for every pump.fun fee event: distributions, social-handle claims, config changes, typed `TokenFeeClaimStreamEvent`; PRO+). Lifecycle: `open`, `close`, `reconnect`, `heartbeat`, `error`. Node 22+ uses the global `WebSocket`; on Node < 22 also `npm i ws`.
 
 #### `client.stream.sessions()` / `client.stream.deleteSession(id)` *(new in 2.17 — PRO+)*
 
