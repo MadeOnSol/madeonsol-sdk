@@ -1764,6 +1764,156 @@ export interface TokenPoolsResponse {
   summary: TokenPoolsSummary;
 }
 
+/** Wallet-intelligence label on a live holder (`GET /tokens/{mint}/holders`).
+ * Labels come from MadeOnSol's swap-ledger data — an empty `labels[]` means
+ * "unknown to us", NOT "verified clean". */
+export type TokenHolderLabel =
+  | "deployer"
+  | "kol"
+  | "early_buyer"
+  | "buyer"
+  | "bundle"
+  | "bot"
+  | "dump_cluster";
+
+/** Why an owner was excluded from the circulating denominator and listed in
+ * `excluded[]`: `pool` = vault authority of a known pool (`dex` + `pool_address`
+ * set); `bonding_curve` = pump.fun / LaunchLab curve; `burn` = incinerator /
+ * system program; `program_account` = an off-curve owner we could not attribute
+ * to a known pool (vault, escrow, staking, unknown pool). */
+export type TokenHolderExcludedReason = "pool" | "bonding_curve" | "burn" | "program_account";
+
+/** How the holder set was read. `getProgramAccounts_census` = full mint-scoped
+ * census (exact `holder_count`, ranks 1–100 retained). `getTokenLargestAccounts`
+ * = the top-20 fallback used only when the provider refuses the census for a
+ * mega-cap mint (`holder_count: null`, `source.census_fallback_reason` set). */
+export type TokenHoldersMethod = "getProgramAccounts_census" | "getTokenLargestAccounts";
+
+/** One disclosed holder — token accounts merged per owner wallet. */
+export interface TokenHolder {
+  /** 1-based rank by balance among non-excluded owners. */
+  rank: number;
+  /** Owner wallet (owner of the token account(s)). */
+  owner: string;
+  /** Every non-zero token account of this owner for the mint. */
+  token_accounts: string[];
+  /** Raw u64 balance as a decimal STRING — never a float. Use BigInt(). */
+  amount_raw: string;
+  /** UI amount (`amount_raw / 10^decimals`); null when decimals are unknown. */
+  amount: number | null;
+  /** Share of TOTAL supply, 0–100. */
+  pct_of_supply: number | null;
+  /** Share of circulating supply (total minus pools/curves/burns), 0–100. */
+  pct_of_circulating: number | null;
+  /** MadeOnSol labels. Empty = unknown to us, not verified clean. */
+  labels: TokenHolderLabel[];
+  kol_name: string | null;
+  /** This owner's rank in the token's early-buyer cohort, if any. */
+  early_buyer_rank: number | null;
+  /** Alpha-wallet classifier enum (`"none"`/`"low"`/`"medium"`/`"high"`), not a number. */
+  bot_confidence: string | null;
+  historical_win_rate: number | null;
+}
+
+/** An owner excluded from the circulating denominator (pool / bonding curve /
+ * burn / unattributed program account), NAMED where possible. */
+export interface TokenHoldersExcluded {
+  owner: string;
+  token_accounts: string[];
+  /** Raw u64 balance as a decimal STRING — never a float. */
+  amount_raw: string;
+  /** Share of TOTAL supply, 0–100. */
+  pct_of_supply: number | null;
+  reason: TokenHolderExcludedReason;
+  /** pumpfun | pumpswap | raydium | launchlab | meteora | orca | jupiter — when named. */
+  dex: string | null;
+  pool_address: string | null;
+}
+
+/** Concentration over the FULL owner set — tier only governs how many ranks are
+ * disclosed in `holders[]`; these numbers are identical on PRO/ULTRA/BUSINESS.
+ * All `*_share` / `*_pct` values are 0–100 (or null when the denominator is
+ * unknown). */
+export interface TokenHoldersConcentration {
+  /** Exact distinct non-zero owners minus excluded pools/curves/burns, at `slot`
+   * (census). null ONLY when the provider refused the census (see
+   * `source.census_fallback_reason`) — never estimated from trades. */
+  holder_count: number | null;
+  holder_count_source: "census" | null;
+  token_accounts_nonzero: number | null;
+  /** Total supply, raw u64 as a string. */
+  supply_raw: string | null;
+  /** Supply minus excluded owners, raw u64 as a string. */
+  circulating_raw: string | null;
+  decimals: number | null;
+  /** Shares of CIRCULATING supply held by ranks 1 / 1–10 / 1–20. */
+  top1_share: number | null;
+  top10_share: number | null;
+  top20_share: number | null;
+  /** Census only — null on the top-20 fallback. */
+  top50_share: number | null;
+  /** Census only — null on the top-20 fallback. */
+  top100_share: number | null;
+  /** Share of TOTAL supply in excluded owners (= pool_pct + burned_pct + program_pct). */
+  pool_and_program_pct: number | null;
+  /** Share of total supply in NAMED pools + bonding curves. */
+  pool_pct: number | null;
+  /** Share of total supply at burn addresses. */
+  burned_pct: number | null;
+  /** Share of total supply held by off-curve owners we could not attribute. */
+  program_pct: number | null;
+  /** Shares of circulating supply held by labelled cohorts. */
+  deployer_pct: number | null;
+  kol_pct: number | null;
+  early_buyer_pct: number | null;
+  bundle_pct: number | null;
+  bot_pct: number | null;
+  dump_cluster_pct: number | null;
+  distinct_owners_in_top20: number;
+  /** How many ranked owners the scan retained (≤100 census, ≤20 fallback). */
+  ranked_owners_available: number;
+}
+
+export interface TokenHoldersDeployer {
+  wallet: string;
+  tier: string;
+  bonding_rate: number | null;
+}
+
+export interface TokenHoldersSource {
+  method: TokenHoldersMethod;
+  /** SPL Token or Token-2022 program id the mint lives under (pump.fun = Token-2022). */
+  token_program: string | null;
+  /** Ranks retained by the scan: 100 (census) or 20 (fallback). */
+  rpc_cap: number;
+  commitment: string;
+  scan_ms: number;
+  /** Set when the census was refused and the top-20 fallback was served. */
+  census_fallback_reason: string | null;
+  note: string;
+}
+
+/** `GET /tokens/{mint}/holders` — live holder census + concentration for a
+ * Solana mint, read from the ledger at `confirmed` (who holds NOW, as opposed
+ * to `capTable`, which is who bought first). */
+export interface TokenHoldersResponse {
+  mint: string;
+  /** Ledger slot the holder set was read at. */
+  slot: number;
+  as_of: string;
+  /** Disclosed ranks: PRO 1–10, ULTRA 1–50, BUSINESS 1–100 (≤20 on the fallback). */
+  holders: TokenHolder[];
+  count: number;
+  /** Rank cap for your tier: 10 PRO, 50 ULTRA, 100 BUSINESS. */
+  disclosed: number;
+  /** Pools / bonding curves / burns / unattributed program accounts — excluded
+   * from the circulating denominator, named where possible. */
+  excluded: TokenHoldersExcluded[];
+  concentration: TokenHoldersConcentration;
+  deployer: TokenHoldersDeployer | null;
+  source: TokenHoldersSource;
+}
+
 export type CandleTimeframe = "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
 
 export interface CandlesParams {
@@ -3251,6 +3401,43 @@ class AlphaClient {
   tokenDepth(mint: string, params: TokenDepthParams = {}): Promise<TokenDepthResponse> {
     const sizes = Array.isArray(params.sizes) ? params.sizes.join(",") : params.sizes;
     return this._fetch(buildUrl(this._baseUrl, `/tokens/${encodeURIComponent(mint)}/depth`, { sizes }));
+  }
+
+  /**
+   * v2.24 — Live holders, holder count + concentration for a Solana mint
+   * (`GET /tokens/{mint}/holders`): a full holder census read from the ledger
+   * at `confirmed` (every token account of the mint, owner + balance, merged
+   * per owner) — who holds NOW, as opposed to `capTable` (who bought first).
+   *
+   * Hard truths the payload states rather than hides:
+   * - `amount_raw` (holders and excluded) is a raw u64 **string** — never a
+   *   float; use `BigInt()`. `amount` is the UI-scaled convenience number.
+   * - `concentration.holder_count` is EXACT (distinct non-zero owners minus
+   *   excluded pools/curves/burns) and null ONLY when the provider refused the
+   *   census for a mega-cap mint — then `source.method` is
+   *   `"getTokenLargestAccounts"` (top-20 view) with `census_fallback_reason`
+   *   set. It is never estimated from trades.
+   * - Pools, bonding curves, burns and unattributed program accounts are
+   *   EXCLUDED from the circulating denominator and listed in `excluded[]`,
+   *   each NAMED where we can (`pool` + `dex` + `pool_address`,
+   *   `bonding_curve` for pump.fun/LaunchLab, `burn`, else `program_account`).
+   *   The #1 raw account of a fresh memecoin is its own bonding curve.
+   * - Disclosure is tier-gated (**PRO** ranks 1–10, **ULTRA** 1–50,
+   *   **BUSINESS** 1–100); the concentration maths is tier-independent.
+   * - `labels[]` are from MadeOnSol data — empty means unknown to us, not clean.
+   *
+   * Latency: fresh pump.fun mints <1 s; 200k–550k-account tokens 6–11 s. If the
+   * upstream scan is still running the API answers **503** with
+   * `error_kind: "holder_scan_in_progress"` and `retry_after_seconds: 20` —
+   * the scan continues and is cached, so the retry is instant. `503`
+   * `holder_rpc_unavailable` (`retry_after_seconds: 15`) means fail-closed.
+   * Both surface as a `MadeOnSolError` with `status === 503`; read
+   * `error.body.error_kind` / `error.body.retry_after_seconds`. Unknown mint:
+   * 404 `error_kind: "not_a_mint"`. **PRO+** — BASIC receives HTTP 403.
+   * @param mint Token mint address.
+   */
+  holders(mint: string): Promise<TokenHoldersResponse> {
+    return this._fetch(buildUrl(this._baseUrl, `/tokens/${encodeURIComponent(mint)}/holders`));
   }
 }
 

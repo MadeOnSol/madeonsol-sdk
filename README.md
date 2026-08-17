@@ -12,6 +12,8 @@
 Official TypeScript/JavaScript SDK for the **[MadeOnSol](https://madeonsol.com) Solana API** — zero dependencies, fully typed, works in Node.js ≥ 18 and edge runtimes.
 > Real-time Solana trading intelligence: track 1,069 KOL wallets with <3s latency, score 23,000+ Pump.fun deployers, surface deshred deploy signals **~500ms before on-chain confirmation**, detect multi-KOL coordination, score token rug-risk 0–100 with a transparent factor breakdown, expose the bundle cohort that bought a token together and how much of supply it still holds, verify any wallet's current on-chain holdings with airdrop/insider `transfer_delta` detection, push every pump.fun graduation the second it bonds, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day, every endpoint — no signup payment. Get a key at [madeonsol.com/pricing](https://madeonsol.com/pricing).
 
+> **New in 2.24.0 — live holder census: exact holder count, labelled holders, and pools that are named, not just excluded.** `client.alpha.holders(mint)` (typed `TokenHoldersResponse`) binds `GET /tokens/{mint}/holders` (PRO+): every token account of the mint read from the ledger at `confirmed` and merged per owner, so `concentration.holder_count` is EXACT (distinct non-zero owners minus pools / bonding curves / burns) — never a trade-derived estimate; it is `null` only when the provider refuses the census for a mega-cap, in which case you get the top-20 view and `source.census_fallback_reason` says so. Each disclosed owner carries our labels (`deployer` / `kol` / `early_buyer` / `bundle` / `bot` / `dump_cluster` — empty means unknown to us, not clean), and `excluded[]` NAMES what was taken out of the circulating denominator: `reason` = `pool` (with `dex` + `pool_address`), `bonding_curve` (pump.fun / LaunchLab), `burn`, or `program_account` only when we genuinely cannot attribute the PDA; `pool_pct` / `burned_pct` / `program_pct` split the exclusion. Amounts are raw u64 **strings**. Disclosure: PRO ranks 1–10, ULTRA 1–50, BUSINESS 1–100 — the maths is tier-independent. Big tokens take 5–30 s upstream: you get `503 holder_scan_in_progress` with `retry_after_seconds: 20` while the scan finishes into the cache, and the retry is instant.
+
 > **New in 2.23.0 — two prices on the trade tape, and the right one is now the default.** The trade tape now tells you what a trade actually cost. `price_sol`/`price_usd` on each trade are THIS trade's executed price — `sol_amount / token_amount`, reconciling exactly with the amounts on the same row and with the PnL endpoints. Because `sol_amount` is the wallet's net SOL movement, that is the trader's all-in effective rate: swap fee and any account rent included, not the pool mid. The market-cap tracker's canonical pool price moved to the new **`market_price_sol`/`market_price_usd`** fields — sampled once per token per pool update, so every trade in the same slot shares it. Until now `price_sol` carried that canonical value and disagreed with the row's own amounts by a **7.9% median** (p90 ~74%): a stale market price reads low in a pump and high in a dump, so anything you averaged out of the tape inherited the bias instead of cancelling it. Use `price_sol` for cost basis, fills and PnL; `market_price_sol` for a per-token series independent of trade size and direction. Both `client.alpha.tokenTrades(mint)` and `client.wallet.trades(address)` carry all four fields on `TokenTrade` / `WalletTrade` — the wallet tape returned amounts and no price at all before.
 
 > **New in 2.22.0** — **Clean stream shutdown.** `client.stream.connect().close()` now fully tears down the underlying WebSocket so short-lived scripts exit promptly instead of hanging on a lingering socket. In Node the client now prefers the `ws` package (which exposes `terminate()`) and hard-terminates on close; the browser still uses the native WebSocket. No API changes — purely a lifecycle fix. (If you don't already depend on `ws` and want the fast exit on Node ≥22, `npm i ws`.)
@@ -577,6 +579,45 @@ console.log(`${summary.active_pool_count}/${summary.pool_count} live across ${su
 ```
 
 Returns: `TokenPoolsResponse`
+
+---
+
+#### `client.alpha.holders(mint)`
+
+Live holders, holder count + concentration (`GET /tokens/{mint}/holders`) — a full holder census read from the ledger at `confirmed`: every token account of the mint (owner + balance), merged per owner. This is who holds **now**; `capTable` is who bought first. **PRO+** — BASIC receives HTTP 403.
+
+- `concentration.holder_count` is **exact** (distinct non-zero owners minus excluded pools/curves/burns, at `slot`) and `null` only when the provider refused the census for a mega-cap mint — then `source.method` is `"getTokenLargestAccounts"` (top-20 view) and `source.census_fallback_reason` is set. It is never estimated from trades.
+- `amount_raw` on every holder and excluded row is a raw u64 **string** — never a float; use `BigInt()`. `amount` is the UI-scaled convenience number.
+- Pools, bonding curves, burns and unattributed program accounts are **excluded** from the circulating denominator and listed in `excluded[]`, each named where possible: `reason` `pool` (+ `dex`, `pool_address`), `bonding_curve` (pump.fun / LaunchLab), `burn`, else `program_account`. The #1 raw account of a fresh memecoin is its own bonding curve. `concentration.pool_pct` / `burned_pct` / `program_pct` split them (over total supply).
+- Disclosure is tier-gated: **PRO** ranks 1–10, **ULTRA** 1–50, **BUSINESS** 1–100 (`disclosed` tells you your cap); `top1/top10/top20/top50/top100_share`, the cohort `*_pct` values and `holder_count` are computed over the full set and are identical on every tier. All shares are 0–100.
+- Each holder carries `labels[]` from MadeOnSol wallet intelligence (`deployer` / `kol` / `early_buyer` / `buyer` / `bundle` / `bot` / `dump_cluster`) plus `kol_name`, `early_buyer_rank`, `bot_confidence`, `historical_win_rate`. Empty labels = unknown to us, not verified clean.
+- Latency: fresh pump.fun mints <1 s; 200k–550k-account tokens 6–11 s. While the upstream scan is still running the API answers **503** `error_kind: "holder_scan_in_progress"` with `retry_after_seconds: 20` — the scan keeps going and is cached, so the retry is instant. `holder_rpc_unavailable` (503, `retry_after_seconds: 15`) is a fail-closed RPC outage. Both throw `MadeOnSolError` with `status === 503`; inspect `error.body`. Unknown mint: 404 `error_kind: "not_a_mint"`.
+
+```ts
+import { MadeOnSolError } from "madeonsol";
+
+async function holders(mint: string) {
+  for (;;) {
+    try {
+      return await client.alpha.holders(mint);
+    } catch (e) {
+      const body = e instanceof MadeOnSolError ? (e.body as { error_kind?: string; retry_after_seconds?: number }) : null;
+      if (e instanceof MadeOnSolError && e.status === 503 && body?.error_kind === "holder_scan_in_progress") {
+        await new Promise((r) => setTimeout(r, (body.retry_after_seconds ?? 20) * 1000)); // scan is cached — retry is instant
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+
+const { holders: top, concentration, excluded } = await holders("EPjFW...");
+console.log(`${concentration.holder_count} holders · top10 ${concentration.top10_share}% of circulating`);
+console.log(`bonding curve / pools hold ${concentration.pool_pct}% of supply (${excluded.length} excluded owners)`);
+console.log(top[0].owner, BigInt(top[0].amount_raw), top[0].labels);
+```
+
+Returns: `TokenHoldersResponse` (`TokenHolder`, `TokenHoldersExcluded`, `TokenHoldersConcentration`, `TokenHoldersDeployer`, `TokenHoldersSource`, `TokenHolderLabel`, `TokenHolderExcludedReason`, `TokenHoldersMethod`)
 
 ---
 
