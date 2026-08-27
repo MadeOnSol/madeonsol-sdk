@@ -3525,8 +3525,14 @@ export interface ToolsSearchResponse {
 
 export interface StreamToken {
   token: string;
-  expires_at: string;
+  /** Always `null` since 2026-08-27 — stream tokens never expire. Kept for wire compatibility; do not schedule refreshes on it. */
+  expires_at: string | null;
+  /** Always `null` since 2026-08-27 — the server never rotates a token on its own. Kept for wire compatibility. */
   next_refresh_at?: string | null;
+  /** `true` when this call replaced your previous token (`rotate: true`); the old value keeps working for 60 s. */
+  rotated?: boolean;
+  /** Human-readable lifetime statement ("This token does not expire. …"). */
+  lifetime?: string;
   ws_url: string;
   /** DEX trade stream URL — only present for Ultra tier subscribers */
   dex_ws_url?: string | null;
@@ -4976,18 +4982,25 @@ class ToolsClient {
 class StreamClient {
   constructor(
     private readonly _get: <T>(url: string) => Promise<T>,
-    private readonly _post: <T>(url: string) => Promise<T>,
+    private readonly _post: <T>(url: string, body?: unknown) => Promise<T>,
     private readonly _delete: <T>(url: string) => Promise<T>,
     private readonly _baseUrl: string,
   ) {}
 
   /**
-   * Generate a 24-hour WebSocket streaming token.
+   * Issue your WebSocket streaming token. Stream tokens never expire (since
+   * 2026-08-27): every call returns the same token until your subscription
+   * lapses or you pass `{ rotate: true }`, which replaces it (the previous
+   * value keeps working for 60 s). `expires_at` / `next_refresh_at` are always
+   * `null` — the server never rotates on its own and never sends
+   * `token_refresh` unless you rotated. A `4001` close means "mint again"
+   * (lapsed or rotated), never a timer. Authenticate the handshake with
+   * `Authorization: Bearer <token>` (`?token=` still works, masked in logs).
    * Pro/Ultra: ws_url for KOL/deployer event streaming.
    * Ultra only: dex_ws_url for all-DEX trade streaming.
    */
-  getToken(): Promise<StreamToken> {
-    return this._post(buildUrl(this._baseUrl, "/stream/token"));
+  getToken(opts?: { rotate?: boolean }): Promise<StreamToken> {
+    return this._post(buildUrl(this._baseUrl, "/stream/token"), opts?.rotate ? { rotate: true } : undefined);
   }
 
   /**
