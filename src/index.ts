@@ -1356,6 +1356,110 @@ export interface DeployerHistoryResponse {
   snapshots: DeployerHistorySnapshot[];
 }
 
+export interface DeployerAsOfParams {
+  /** YYYY-MM-DD (UTC). Default: today. Must be >= 2026-04-07 and not in the future. */
+  date?: string;
+}
+
+/** The reputation snapshot current on the requested date — `snapshot_date` can be
+ * earlier than `requested_date` (snapshots are write-on-change); `carried: true`
+ * means the state was recorded earlier and had not changed by then. */
+export interface DeployerAsOfSnapshot {
+  snapshot_date: string;
+  carried: boolean;
+  tier: string | null;
+  is_tracked: boolean | null;
+  total_deployed: number | null;
+  total_bonded: number | null;
+  bonding_rate: number | null;
+  recent_bond_rate: number | null;
+  avg_peak_mc: number | null;
+  best_token_peak_mc: number | null;
+  captured_at: string | null;
+}
+
+export interface DeployerAsOfResponse {
+  is_deployer: boolean;
+  wallet: string;
+  requested_date: string;
+  /** true when a snapshot at or before requested_date exists. */
+  as_of: boolean;
+  /** null when no snapshot exists at or before requested_date — nothing is ever synthesized. */
+  snapshot: DeployerAsOfSnapshot | null;
+  first_snapshot_date: string | null;
+  note: string;
+}
+
+/** sol / usdc are summed separately (never mixed); usd is null (not 0) when a SOL
+ * amount exists and no SOL price was available. */
+export interface DeployerRewardsMoney {
+  sol: number;
+  usdc: number;
+  usd: number | null;
+}
+
+export interface DeployerRewardsRail extends DeployerRewardsMoney {
+  count: number;
+  first_at: string | null;
+  last_at: string | null;
+}
+
+export interface DeployerRewardsSocial {
+  platform: number;
+  user_id: string;
+}
+
+export interface DeployerRewardsTopToken {
+  mint: string;
+  quote: "SOL" | "USDC";
+  total: number;
+  total_usd: number | null;
+  to_self: number;
+  to_self_usd: number | null;
+  payouts: number;
+  recipients: number;
+  last_at: string;
+}
+
+export interface DeployerRewardsTopRecipient {
+  address: string;
+  quote: "SOL" | "USDC";
+  total: number;
+  total_usd: number | null;
+  tokens: number;
+  payouts: number;
+  last_at: string;
+  is_self: boolean;
+  is_social_pda: boolean;
+  social: DeployerRewardsSocial | null;
+}
+
+export interface DeployerRewardsResponse {
+  wallet: string;
+  is_deployer: boolean;
+  /** Tokens attributed to this wallet in our token table — the universe `attributed`
+   * is computed over. NOT the same count as the deployer profile's total deploys. */
+  tokens_in_scope: number;
+  collected: DeployerRewardsMoney & {
+    direct_claims: DeployerRewardsRail & { window_days: number };
+    social_claims: DeployerRewardsRail;
+    share_payouts: DeployerRewardsRail & { tokens: number; on_own_tokens: DeployerRewardsMoney };
+  };
+  attributed: DeployerRewardsRail & {
+    to_self: DeployerRewardsMoney;
+    to_others: DeployerRewardsMoney;
+    /** Share of attributed fees redirected away from the deployer, 0–100. Null with no attributed fees. */
+    redirected_pct: number | null;
+    tokens_with_payouts: number;
+    distributions: number;
+    recipients: number;
+  };
+  top_tokens: DeployerRewardsTopToken[];
+  top_recipients: DeployerRewardsTopRecipient[];
+  quote: { sol_usd: number | null };
+  coverage: { payouts_since: string; direct_claims_window_days: number; note: string };
+}
+
 // ─── Alpha wallet intelligence types ─────────────────────────────────────────
 
 export type AlphaSort = "win_rate" | "pnl" | "roi";
@@ -4710,6 +4814,34 @@ class DeployerClient {
       `/deployer-hunter/${encodeURIComponent(wallet)}/history`,
       opts as Record<string, number | undefined>,
     ));
+  }
+
+  /**
+   * A deployer's reputation exactly as it stood on a given date — the latest
+   * write-on-change snapshot at or before it, so a backtest sees only what was
+   * knowable then. Nothing is ever synthesized: before the deployer's first
+   * snapshot you get `as_of: false, snapshot: null`.
+   * @param wallet Deployer wallet address.
+   * @param opts Optional: `date` (YYYY-MM-DD, default today).
+   */
+  deployerAsOf(wallet: string, opts?: DeployerAsOfParams): Promise<DeployerAsOfResponse> {
+    return this._fetch(buildUrl(
+      this._baseUrl,
+      `/deployer-hunter/${encodeURIComponent(wallet)}/as-of`,
+      opts as Record<string, string | undefined>,
+    ));
+  }
+
+  /**
+   * pump.fun creator-fee rewards for a wallet, answered two ways that are never
+   * merged: `collected` (what actually reached the wallet — direct vault claims,
+   * social-handle claims, shareholder payouts on any token) and `attributed`
+   * (every payout on the tokens this wallet deployed, split `to_self`/`to_others`
+   * with `redirected_pct`). Works for non-deployers too (`is_deployer: false`).
+   * @param wallet Wallet address.
+   */
+  deployerRewards(wallet: string): Promise<DeployerRewardsResponse> {
+    return this._fetch(buildUrl(this._baseUrl, `/deployer-hunter/${encodeURIComponent(wallet)}/rewards`));
   }
 }
 
