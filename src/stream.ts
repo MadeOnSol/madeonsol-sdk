@@ -720,6 +720,19 @@ export class MadeOnSolStream {
     });
   }
 
+  /**
+   * A pre-Phase-2 server (ignores sub_id) answers every resume with ONE
+   * replay for the whole connection, reported without sub_id: only "default"
+   * can still be awaited. Finishes the recovery at once when that one has
+   * already ended.
+   */
+  private collapsePending(r: Recovery): void {
+    if (r.pending.size === 1 && r.pending.has(DEFAULT_SUB_ID)) return;
+    r.pending.clear();
+    if (!r.ends.has(DEFAULT_SUB_ID)) r.pending.add(DEFAULT_SUB_ID);
+    if (r.pending.size === 0 && r.protocol !== "detect") this.finishRecovery(r.ends.get(DEFAULT_SUB_ID) ?? null);
+  }
+
   /** A subscription removed while its replay was still awaited: stop waiting for it. */
   private forgetPending(subId: string): void {
     const r = this.recovery;
@@ -1159,9 +1172,18 @@ export class MadeOnSolStream {
         // deployment) — every subscription then collapsed into one on the
         // server. Said once, never silently.
         const expected = this.ackExpect.shift() ?? DEFAULT_SUB_ID;
-        if (expected !== DEFAULT_SUB_ID && typeof msg.sub_id !== "string" && !this.namedUnsupportedWarned) {
-          this.namedUnsupportedWarned = true;
-          this.emit("warning", { code: "named_subscriptions_unsupported", sub_id: expected, message: "The server ignored sub_id: it predates named subscriptions, so every subscription on this connection shares one channel set and one filter object." } satisfies StreamWarning);
+        // The subscription this ack is about: the server's sub_id, else the
+        // one we sent in this position (an older server echoes none).
+        const ackedId = typeof msg.sub_id === "string" && msg.sub_id ? msg.sub_id : expected;
+        if (expected !== DEFAULT_SUB_ID && typeof msg.sub_id !== "string") {
+          if (!this.namedUnsupportedWarned) {
+            this.namedUnsupportedWarned = true;
+            this.emit("warning", { code: "named_subscriptions_unsupported", sub_id: expected, message: "The server ignored sub_id: it predates named subscriptions, so every subscription on this connection shares one channel set and one filter object." } satisfies StreamWarning);
+          }
+          // Such a server runs ONE replay for the whole connection and reports
+          // it without sub_id ("default"): every named id must leave `pending`
+          // or the recovery would never finish and the cursor would freeze.
+          if (r) this.collapsePending(r);
         }
         this.emit("subscribed", msg.channels, msg as unknown as StreamEvent);
         if (r && r.protocol === "detect" && !r.acked) {
@@ -1175,8 +1197,9 @@ export class MadeOnSolStream {
           // replay running or queued): no replay_end will come for it. When
           // nothing at all was accepted, nothing was recovered, so the
           // committed cursor must not move until a later recovery completes.
-          r.pending.delete(subIdOf(msg));
+          r.pending.delete(ackedId);
           if (r.pending.size === 0 && r.ends.size === 0) { this.dropRecovery(); this.unsafe = true; }
+          else if (r.pending.size === 0 && r.protocol !== "detect") this.finishRecovery([...r.ends.values()].pop() ?? null);
         }
         return;
       }

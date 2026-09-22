@@ -104,9 +104,18 @@ class FakeServer {
     if (this.mode === "v1") {
       // PR #81: the ack echoes resume {…, accepted}; replay_start … replay_end
       // always precede live frames; durable frames carry seq:null, mode:"durable".
+      // A Phase 1 server (namedUnsupported) also refuses a second resume on
+      // the same socket while/after one ran: accepted:false, no sub_id, a
+      // replay_in_progress warning and NO replay_start / replay_end.
+      if (this.namedUnsupported && msg.resume && ws.replayRan) {
+        ws.push({ ...ack, resume: { ...msg.resume, accepted: false, reason: "replay_in_progress" } });
+        ws.push({ type: "warning", code: "replay_in_progress", channels: msg.channels, ts: Date.now() });
+        return;
+      }
       if (this.echoResume && msg.resume) ack.resume = { ...msg.resume, accepted: true };
       ws.push(ack);
       if (msg.resume) {
+        ws.replayRan = true;
         const r = msg.resume;
         const same = r.instance === this.instance;
         const mode = same ? "ring" : "durable";
@@ -1149,4 +1158,39 @@ test("older server that ignores sub_id: a named subscribe acked without sub_id r
   const w = events.warning.filter((x) => x.code === "named_subscriptions_unsupported");
   assert.equal(w.length, 1);
   assert.equal(w[0].sub_id, "a");
+});
+
+test("REGRESSION (#84 review): Phase 1 server (ignores sub_id, refuses the 2nd resume without sub_id): the recovery finishes and the cursor commits, default-first", async () => {
+  const server = new FakeServer();
+  server.namedUnsupported = true;
+  for (let i = 1; i <= 3; i++) server.frame({ seq: i });
+  const { stream, events } = makeStream(server, { resume: { instance: "inst-A", seq: 1, ts: 1_000_001 } });
+  stream.subscribe([CH]);
+  stream.subscribe({ subId: "x", channels: [CH] });
+  await until(() => events.replay.length === 1, 2000, "replay finishes");
+  assert.equal(events.replay[0].complete, true);
+  assert.deepEqual(stream.getCursor(), { instance: "inst-A", seq: 3, ts: 1_000_003 }, "committed after the single replay_end");
+  assert.equal(stream.isRecoveryIncomplete(), false);
+  assert.equal(events.warning.filter((w) => w.code === "named_subscriptions_unsupported").length, 1);
+  // Live frames commit again, and a reconnect resumes + commits again (no freeze across reconnects).
+  server.live(server.last, { seq: 4 });
+  await until(() => stream.getCursor().seq === 4);
+  server.last.serverClose(1006);
+  await until(() => events.replay.length === 2, 3000, "second replay after reconnect");
+  server.live(server.last, { seq: 5 });
+  await until(() => stream.getCursor().seq === 5, 2000, "cursor moves after reconnect");
+});
+
+test("REGRESSION (#84 review): Phase 1 server, named-first: the one replay is attributed to the connection and commits", async () => {
+  const server = new FakeServer();
+  server.namedUnsupported = true;
+  for (let i = 1; i <= 3; i++) server.frame({ seq: i });
+  const { stream, events } = makeStream(server, { resume: { instance: "inst-A", seq: 1, ts: 1_000_001 } });
+  stream.subscribe({ subId: "a", channels: [CH] });
+  stream.subscribe({ subId: "b", channels: [CH] });
+  stream.subscribe([CH]);
+  await until(() => events.replay.length === 1, 2000, "replay finishes");
+  assert.deepEqual(events.replay[0].subscriptions, ["default"]);
+  assert.deepEqual(stream.getCursor(), { instance: "inst-A", seq: 3, ts: 1_000_003 });
+  assert.equal(stream.isRecoveryIncomplete(), false);
 });
