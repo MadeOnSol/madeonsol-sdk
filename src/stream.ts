@@ -207,21 +207,60 @@ export interface StreamReplayResult {
 }
 
 /**
- * Part of a resume could not be recovered. `reasons` uses the server's
- * vocabulary (`backpressure`, `ring_truncated`, `instance_changed`,
- * `window_exceeded`, `row_cap`, `not_reconstructable`) plus the client-side
- * `replay_timeout`. Backfill the window from REST if you need it.
+ * Part of a resume could not be recovered. It says what is KNOWN: which
+ * channels the server could not fully rebuild, the RANGE that may be
+ * incomplete (`skipped.from` → `skipped.to`, or from `from` onwards while the
+ * cursor stays), the server's reason and whether it is final, and the bounds
+ * the server reported (`limits`, and per-channel entries in `channels`:
+ * `time_basis`, `truncated_at_ts`, `retry_after_ms`, …). Events in that range
+ * MAY be missing — how many, nobody can say, so this never claims a count.
+ * Backfill the range from REST if you need certainty. `reasons` uses the
+ * server's vocabulary (`backpressure`, `closed`, `source_busy`,
+ * `source_error`, `late_ingest_possible`, `row_cap`, `ring_truncated`,
+ * `instance_changed`, `window_exceeded`, `not_reconstructable`) plus the
+ * client-side `replay_timeout`.
  */
 export interface StreamGap {
   /** The first reason (convenience). */
   reason: string;
   reasons: string[];
+  /**
+   * true when EVERY reason is permanent — asking again can never fill it
+   * (`not_reconstructable`, `state_stream`, `window_exceeded`, or an older
+   * server's `ring_truncated` / `instance_changed`). The client reports it
+   * once and commits as if complete. false = transient (`backpressure`,
+   * `row_cap`, `source_busy`, `source_error`, `late_ingest` / `best_effort`,
+   * `incomplete`, `replay_timeout`, …): the committed cursor stays and the
+   * range is requested again on the next reconnect.
+   */
+  permanent: boolean;
   /** Per-channel entries the server reported as incomplete / not reconstructable. */
   channels: Record<string, unknown>;
   /** The cursor the resume started from (the committed cursor stays there). */
   from: StreamCursor | null;
-  /** The server's suggested next step (e.g. backfill from REST), when it gives one. */
-  nextStep: string | null;
+  /** true when the server says the gap is transient and worth asking again (`retryable`). */
+  retryable: boolean;
+  /** How long the server wants you to wait before resuming again (ms), when it says. */
+  retryAfterMs: number | null;
+  /** For `row_cap`: the ts to resume from next (the client uses it automatically). */
+  resumeTsHint: number | null;
+  /**
+   * true when the CLIENT decided to continue past this gap and move the
+   * committed cursor beyond it — the events in `skipped` are not coming back.
+   * This is the SDK's own decision (see `onUnrecoverableGap`), never a user
+   * approval. false = the cursor stayed put.
+   */
+  advancedPastGap: boolean;
+  /** "auto" = the client's own decision; "manual" = you called `acceptGap()`. */
+  source: "auto" | "manual";
+  /**
+   * The range that may be incomplete: the channels the server could not fully
+   * rebuild and the cursor positions the client jumped between (`to` is null
+   * when the cursor did not move). Events in that range may be missing.
+   */
+  skipped: { channels: string[]; from: StreamCursor | null; to: StreamCursor | null };
+  /** Bounds the server reported for this resume (max age, row caps, slack), when it sends them. */
+  limits: Record<string, unknown> | null;
   replay: StreamReplayResult;
 }
 
@@ -229,6 +268,8 @@ export interface StreamGap {
 export interface StreamFatal {
   code: number | null;
   reason: string;
+  /** The unrecoverable gap that stopped it (`onUnrecoverableGap: "stop"` only). */
+  gap?: StreamGap;
 }
 
 export interface StreamClientOptions {
@@ -267,6 +308,24 @@ export interface StreamClientOptions {
   resumeDetectMs?: number;
   /** Give up waiting for a fallback replay's `replay_end` after this many ms (default: 15000). */
   legacyReplayTimeoutMs?: number;
+  /**
+   * How often to resume again after a RETRYABLE gap before giving up on the
+   * automatic retry (default: 5). The next reconnect resumes again anyway.
+   */
+  maxResumeRetries?: number;
+  /** Wait before an automatic re-resume when the server names none (default: 30000 ms). */
+  resumeRetryDelayMs?: number;
+  /**
+   * What to do when the server reports a gap that asking again can never fill
+   * (`retryable: false`).
+   *  - `"advance"` (default): report it on the `"gap"` event with
+   *    `advancedPastGap: true` and the skipped range, commit past it and keep
+   *    streaming. The skipped events are not delivered — backfill them from
+   *    REST if you need them.
+   *  - `"stop"`: do not move the cursor, stop the stream and emit `"fatal"`
+   *    with the gap, so YOU decide. `acceptGap()` then `connect()` continues.
+   */
+  onUnrecoverableGap?: "advance" | "stop";
 }
 
 type Listener = (data: unknown, evt?: StreamEvent) => unknown;
@@ -336,6 +395,16 @@ function isThenable(v: unknown): v is PromiseLike<unknown> {
   return !!v && (typeof v === "object" || typeof v === "function") && typeof (v as { then?: unknown }).then === "function";
 }
 
+/**
+ * Fallback classification for servers that send no `retryable` flag: reasons
+ * asking again can never fill. The server's own transient list is
+ * backpressure | closed | source_busy | source_error | late_ingest_possible | row_cap.
+ */
+const PERMANENT_GAPS = new Set(["not_reconstructable", "state_stream", "window_exceeded", "ring_truncated", "instance_changed"]);
+function isPermanentGap(reason: string): boolean {
+  return PERMANENT_GAPS.has(reason);
+}
+
 /** Move a cursor to `pos`: never back within one instance; seq:null frames only advance time. */
 function stepCursor(c: StreamCursor | null, pos: Position): StreamCursor | null {
   if (pos.seq !== null && pos.instance) {
@@ -380,6 +449,11 @@ export class MadeOnSolStream {
   private seen = new Map<string, true>();
   private inflight: Array<{ pos: Position | null; commit: boolean; done: boolean }> = [];
   private recovery: Recovery | null = null;
+  /** Automatic re-resume after a retryable gap. */
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private resumeRetries = 0;
+  /** The last gap reported (for acceptGap()'s report). */
+  private lastGap: StreamGap | null = null;
 
   constructor(opts: StreamClientOptions) {
     this.opts = {
@@ -393,6 +467,9 @@ export class MadeOnSolStream {
       connectionLimitBackoffMs: Math.max(0, opts.connectionLimitBackoffMs ?? 60_000),
       resumeDetectMs: Math.max(0, opts.resumeDetectMs ?? 3_000),
       legacyReplayTimeoutMs: Math.max(0, opts.legacyReplayTimeoutMs ?? 15_000),
+      maxResumeRetries: Math.max(0, opts.maxResumeRetries ?? 5),
+      resumeRetryDelayMs: Math.max(0, opts.resumeRetryDelayMs ?? 30_000),
+      onUnrecoverableGap: opts.onUnrecoverableGap === "stop" ? "stop" : "advance",
     };
     this.cursor = validCursor(opts.resume);
     this.progress = this.cursor ? { ...this.cursor } : null;
@@ -438,15 +515,27 @@ export class MadeOnSolStream {
   /**
    * Accept the last reported gap: commit the received progress as the cursor
    * and let live frames commit again. Call it after you backfilled the range
-   * the `"gap"` event named (or decided you do not need it).
+   * the `"gap"` event named (or decided you do not need it). It re-reports the
+   * gap first, with `source: "manual"` and the range being skipped.
    */
   acceptGap(): void {
     this.unsafe = false;
     const p = this.progress;
     const c = this.cursor;
-    if (!p || (c && c.instance === p.instance && c.seq === p.seq && c.ts === p.ts)) return;
-    this.cursor = { ...p };
-    this.emit("cursor", { ...p });
+    const moves = !!p && !(c && c.instance === p.instance && c.seq === p.seq && c.ts === p.ts);
+    if (this.lastGap) {
+      const g: StreamGap = {
+        ...this.lastGap,
+        advancedPastGap: moves,
+        source: "manual",
+        skipped: { channels: this.lastGap.skipped.channels, from: c ? { ...c } : null, to: moves ? { ...p! } : null },
+      };
+      this.lastGap = null;
+      this.emit("gap", g);
+    }
+    if (!moves) return;
+    this.cursor = { ...p! };
+    this.emit("cursor", { ...p! });
   }
 
   private emit(event: string, data: unknown, evt?: StreamEvent): void {
@@ -573,21 +662,37 @@ export class MadeOnSolStream {
     this.scheduleReconnect(code);
   }
 
+  /** `onUnrecoverableGap: "stop"`: stop the stream and hand the decision to the caller. */
+  private haltForGap(gap: StreamGap): void {
+    this.closedByUser = true; // no reconnect; connect() restarts if the caller wants
+    if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
+    this.clearHeartbeat();
+    const sock = this.ws as (WebSocketLike & { terminate?: () => void }) | null;
+    this.ws = null;
+    try {
+      if (typeof sock?.terminate === "function") sock.terminate();
+      else sock?.close(1000, "unrecoverable gap");
+    } catch { /* ignore */ }
+    this.stopped = true;
+    this.emit("fatal", { code: null, reason: `unrecoverable gap: ${gap.reason}`, gap } satisfies StreamFatal);
+  }
+
   private fatal(code: number | null, reason: string): void {
     this.stopped = true;
     if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
     this.emit("fatal", { code, reason } satisfies StreamFatal);
   }
 
-  private sendSubscribe(): void {
+  private sendSubscribe(resumeOverride?: StreamCursor): void {
     const channels = Array.from(this.desired.channels);
     if (channels.length === 0 || !this.ws) return;
     const msg: Record<string, unknown> = { type: "subscribe", channels };
     if (Object.keys(this.desired.filters).length > 0) msg.filters = this.desired.filters;
-    // Only the FIRST subscribe of a connection resumes; a later subscribe adds
-    // channels live (the server replays only the channels named in a subscribe).
-    if (!this.firstSubscribeSent && this.cursor && !this.recovery) {
-      const from = { ...this.cursor };
+    // Only the FIRST subscribe of a connection resumes (or an explicit retry
+    // after a retryable gap); a later subscribe adds channels live, and the
+    // server replays only the channels named in a subscribe.
+    if ((!this.firstSubscribeSent || resumeOverride) && this.cursor && !this.recovery) {
+      const from = resumeOverride ?? { ...this.cursor };
       msg.resume = from;
       this.recovery = {
         protocol: "detect", from, channels, request: { resume: from }, acked: false, suppressAck: false,
@@ -619,6 +724,24 @@ export class MadeOnSolStream {
   private dropRecovery(): void {
     if (this.recovery?.timer) clearTimeout(this.recovery.timer);
     this.recovery = null;
+    if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
+  }
+
+  /**
+   * A retryable gap: ask the server again on this connection after its
+   * retry_after_ms (row_cap resumes from resume_ts_hint). Bounded — the next
+   * reconnect resumes anyway.
+   */
+  private scheduleResumeRetry(retryAfterMs: number | null, hintTs: number | null): void {
+    if (this.retryTimer || !this.cursor) return;
+    if (this.resumeRetries >= this.opts.maxResumeRetries) return;
+    this.resumeRetries++;
+    const delay = retryAfterMs !== null && retryAfterMs >= 0 ? retryAfterMs : this.opts.resumeRetryDelayMs;
+    const from: StreamCursor = hintTs !== null && hintTs > this.cursor.ts ? { ...this.cursor, ts: hintTs } : { ...this.cursor };
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      if (this.ws && this.ws.readyState === OPEN && !this.recovery) this.sendSubscribe(from);
+    }, delay);
   }
 
   private finishRecovery(end: Frame | null): void {
@@ -628,18 +751,14 @@ export class MadeOnSolStream {
     this.recovery = null;
     const reasons: string[] = [];
     const gapChannels: Record<string, unknown> = {};
+    const str = (v: unknown) => (typeof v === "string" && v ? v : null);
+    const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
     // A v1 server answers with complete/sent/matched; an older one with count only.
     const v1 = !!end && ("complete" in end || "sent" in end || "matched" in end);
     if (r.start?.replay_truncated === true || end?.replay_truncated === true) reasons.push("ring_truncated");
-    let nextStep: string | null = null;
-    const str = (v: unknown) => (typeof v === "string" && v ? v : null);
     if (!end) reasons.push("replay_timeout");
     else if (v1) {
       if (end.complete === false) reasons.push(str(end.reason) ?? "incomplete");
-      // Late-write signalling: a best-effort / incomplete replay is not a safe recovery.
-      if (end.best_effort === true) reasons.push(str(end.best_effort_reason) ?? "best_effort");
-      if (end.incomplete === true) reasons.push(str(end.reason) ?? "incomplete");
-      nextStep = str(end.next_step);
       const chs = end.channels;
       if (chs && typeof chs === "object") {
         for (const [ch, raw] of Object.entries(chs as Record<string, unknown>)) {
@@ -647,12 +766,11 @@ export class MadeOnSolStream {
           if (ch === "token:prices") continue;
           const info = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
           const gap = info.gap;
-          const bestEffort = info.best_effort === true;
-          if (info.complete === false || gap || info.mode === "none" || bestEffort || info.incomplete === true) {
-            gapChannels[ch] = raw;
+          const late = info.late_ingest_possible === true;
+          if (info.complete === false || gap || info.mode === "none" || late) {
+            gapChannels[ch] = raw; // raw entry: mode, reason, gap, time_basis, retry_after_ms, …
             const gr = gap && typeof gap === "object" ? (gap as Record<string, unknown>).reason : gap;
-            reasons.push(str(info.reason) ?? str(gr) ?? (info.mode === "none" ? "not_reconstructable" : bestEffort ? str(info.best_effort_reason) ?? "best_effort" : "incomplete"));
-            nextStep = nextStep ?? str(info.next_step);
+            reasons.push(str(info.reason) ?? str(gr) ?? (info.mode === "none" ? "not_reconstructable" : late ? "late_ingest_possible" : "incomplete"));
           }
         }
       }
@@ -676,25 +794,71 @@ export class MadeOnSolStream {
       start: r.start,
       end,
     };
-    // Commit: only a COMPLETE replay moves the committed cursor, to the
-    // server's own last_seq / last_ts (the replay is channel-by-channel, so a
-    // partial one must not advance it). Queued behind replayed handlers still
-    // in flight. An incomplete one leaves it at the pre-resume position and
-    // marks the stream unsafe: live frames are delivered but not committed
-    // until a later recovery completes (or you call acceptGap()).
-    if (uniq.length === 0) {
-      this.unsafe = false;
-      const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
-      const liveFrom = v1 ? num(end?.live_from_seq) : null;
-      const seq = num(end?.last_seq) ?? (liveFrom !== null ? liveFrom - 1 : null) ?? r.maxSeq;
-      const cts = num(end?.last_ts) ?? r.maxTs ?? this.cursor?.ts ?? null;
-      if (cts !== null) this.enqueue({ instance: this.serverInstance, seq: seq !== null && seq >= 0 ? seq : null, ts: cts }, true);
-    } else {
-      this.unsafe = true;
+    // Final vs retryable. The server says which (`retryable`): true only when an
+    // incomplete channel's reason is transient (backpressure, closed,
+    // source_busy, source_error, late_ingest_possible, row_cap). Older servers
+    // send no `retryable`; then the reason list decides (isPermanentGap).
+    const serverSays = !!end && typeof end.retryable === "boolean";
+    const retryable = uniq.length > 0 && (serverSays ? end!.retryable === true : !uniq.every(isPermanentGap));
+    const permanent = uniq.length > 0 && !retryable;
+    // Commit point: complete, or only FINAL gaps (reported once, then treated as
+    // complete so the stream never stays stuck on something asking again cannot
+    // fill). Retryable: keep the pre-resume cursor, do not commit live frames,
+    // and resume again after retry_after_ms (row_cap: from resume_ts_hint).
+    // The position the server says is safe to continue from.
+    let pos: Position | null = null;
+    if (!retryable) {
+      let seq: number | null;
+      let cts: number | null;
+      if (v1) {
+        // {seq: last_seq ?? previous, ts: last_ts ?? previous}
+        seq = num(end?.last_seq);
+        cts = num(end?.last_ts) ?? (seq !== null ? this.cursor?.ts ?? null : null);
+      } else {
+        // Older servers: held live frames (not yet handled) may sit below live_from_seq.
+        const liveFrom = num(end?.live_from_seq);
+        const heldMin = r.held.reduce<number | null>((m, f) => (typeof f.seq === "number" ? (m === null ? f.seq : Math.min(m, f.seq)) : m), null);
+        seq = r.maxSeq ?? (heldMin !== null ? heldMin - 1 : liveFrom !== null ? liveFrom - 1 : null);
+        cts = r.maxTs ?? this.cursor?.ts ?? null;
+      }
+      if (cts !== null) pos = { instance: this.serverInstance, seq: seq !== null && seq >= 0 ? seq : null, ts: cts };
     }
+    // Continuing past a FINAL gap is the SDK's own decision, never the user's
+    // approval: it is reported on the gap event (advancedPastGap / skipped) and
+    // `onUnrecoverableGap: "stop"` turns it off.
+    const strict = uniq.length > 0 && !retryable && this.opts.onUnrecoverableGap === "stop";
+    const willAdvance = !retryable && !strict;
     this.emit("replay", result);
+    let gap: StreamGap | null = null;
     if (uniq.length > 0) {
-      this.emit("gap", { reason: uniq[0], reasons: uniq, channels: gapChannels, from: r.from, nextStep, replay: result } satisfies StreamGap);
+      gap = {
+        reason: uniq[0], reasons: uniq, permanent, retryable,
+        retryAfterMs: num(end?.retry_after_ms), resumeTsHint: num(end?.resume_ts_hint),
+        channels: gapChannels, from: r.from, replay: result,
+        limits: (end?.limits && typeof end.limits === "object" ? end.limits : r.start?.limits && typeof r.start.limits === "object" ? r.start.limits : null) as Record<string, unknown> | null,
+        // What the client does about it — always reported BEFORE it happens.
+        advancedPastGap: willAdvance,
+        source: "auto",
+        skipped: {
+          channels: Object.keys(gapChannels),
+          from: this.cursor ? { ...this.cursor } : null,
+          to: willAdvance && pos ? stepCursor(this.cursor, pos) : null,
+        },
+      };
+      this.lastGap = gap;
+      this.emit("gap", gap);
+    }
+    if (willAdvance) {
+      this.unsafe = false;
+      this.resumeRetries = 0;
+      if (pos) this.enqueue(pos, true);
+    } else if (retryable) {
+      this.unsafe = true;
+      if (serverSays) this.scheduleResumeRetry(num(end?.retry_after_ms), num(end?.resume_ts_hint));
+    } else {
+      // strict: stop instead of skipping what cannot be recovered.
+      this.unsafe = true;
+      this.haltForGap(gap!);
     }
     // Live frames that arrived during a client-side replay go out now, after it.
     for (const f of r.held) this.deliver(f);

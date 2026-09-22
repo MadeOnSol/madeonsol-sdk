@@ -107,7 +107,7 @@ class FakeServer {
         ws.push(this.v1Result ?? {
           type: "replay_end", count: out.length, sent: out.length, matched: out.length, complete: true, reason: null,
           last_seq: same && last ? last.seq : null, last_ts: last ? last.ts : null, live_from_seq: this.seq + 1,
-          mode, resume_reason: same ? null : "instance_changed",
+          mode, resume_reason: same ? null : "instance_changed", retryable: false,
           channels: { [CH]: { mode, sent: out.length, complete: true, ...(this.durableMissing ? { partial: true, missing: this.durableMissing } : {}) } },
           limits: same ? undefined : { max_age_ms: 3_600_000, max_rows_per_channel: 5000, max_rows_total: 20000, slack_ms: 30000 },
           ts: Date.now(),
@@ -301,10 +301,16 @@ test("legacy server, instance changed: falls back to replay_since_ts and reports
   assert.equal(server.subscribes[2].replay_since_ts, 1_000_007);
   assert.equal(server.subscribes[2].replay_since_seq, undefined);
   assert.ok(events.gap[0].reasons.includes("instance_changed"));
+  assert.equal(events.gap[0].permanent, true, "an old server cannot ever replay it");
   assert.deepEqual(got.map((g) => g.seq), [7, 1]);
-  // Incomplete recovery: the committed cursor stays at the pre-resume point.
-  assert.deepEqual(stream.getCursor(), { instance: "inst-A", seq: 7, ts: 1_000_007 });
-  assert.deepEqual(stream.getProgress(), { instance: "inst-B", seq: 1, ts: 2_000_000 });
+  // Final gap: reported once, then committed — the stream must not stay stuck.
+  assert.deepEqual(stream.getCursor(), { instance: "inst-B", seq: 1, ts: 2_000_000 });
+  assert.equal(stream.isRecoveryIncomplete(), false);
+  server.last.serverClose(1006);
+  await until(() => server.subscribes.length === 4, 3000, "reconnect");
+  assert.deepEqual(server.subscribes[3].resume, { instance: "inst-B", seq: 1, ts: 2_000_000 });
+  await sleep(120);
+  assert.equal(events.gap.length, 1, "no endless stuck state");
   stream.close();
 });
 
@@ -341,8 +347,8 @@ test("v1 server: resume echo on the ack skips detection; instance change → dur
   assert.equal(evts[0].mode, "durable");
   assert.equal(evts[0].partial, true);
   assert.deepEqual(evts[0].missing, ["slot", "fdv_usd_at_trade"]);
-  // Complete durable replay: commit the server's position (live_from_seq - 1, last_ts).
-  assert.deepEqual(stream.getCursor(), { instance: "inst-A", seq: 11, ts: 1_000_011 });
+  // Complete durable replay: commit last_seq (null here → keep) / last_ts.
+  assert.deepEqual(stream.getCursor(), { instance: "old", seq: 50, ts: 1_000_011 });
   assert.equal(events.replay[0].mode, "durable");
   assert.equal(events.replay[0].resumeReason, "instance_changed");
   assert.equal(events.gap.length, 0);
@@ -615,11 +621,11 @@ test("REGRESSION: durable recovery dropped between channel A and B → the next 
   assert.deepEqual(server.subscribes[1].resume, resume, "second resume must start from the pre-resume cursor");
   await until(() => events.replay.length === 1, 3000, "replay");
   assert.deepEqual(ids, [`${CH}-1`, "bus-1", `${CH}-2`, `${CH2}-1`, `${CH2}-2`], "B delivered, A/bus duplicates dropped");
-  assert.deepEqual(stream.getCursor(), { instance: "inst-A", seq: 8, ts: T0 + 4 }, "commit = server last_ts / live_from_seq - 1");
+  assert.deepEqual(stream.getCursor(), { instance: "old", seq: 50, ts: T0 + 4 }, "commit = server last_seq (null → keep) / last_ts");
   assert.equal(events.gap.length, 0);
 });
 
-test("REGRESSION: row_cap on one channel → gap, committed cursor kept; a live frame right after does not commit; next reconnect re-requests", async () => {
+test("REGRESSION: row_cap (retryable) keeps the committed cursor and re-resumes from resume_ts_hint", async () => {
   const server = new FakeServer();
   const resume = { instance: "old", seq: 50, ts: T0 };
   let n = 0;
@@ -627,17 +633,17 @@ test("REGRESSION: row_cap on one channel → gap, committed cursor kept; a live 
     n++;
     ackEcho(ws, msg);
     ws.push({ type: "replay_start", mode: "durable", resume: true });
-    ws.push(durable(CH, 1, T0 + 1));
-    ws.push(durable(CH, 2, T0 + 3));
-    ws.push(durable(CH2, 1, T0 + 2));
+    ws.push(durable(CH, n, T0 + n));
     if (n === 1) {
-      ws.push({ type: "replay_end", count: 3, sent: 3, matched: 3, complete: false, reason: "row_cap", last_seq: null, last_ts: T0 + 3, live_from_seq: 21, mode: "durable",
-        next_step: "backfill from REST with since=", channels: { [CH]: { mode: "durable", sent: 2, complete: true }, [CH2]: { mode: "durable", sent: 1, complete: false, gap: "row_cap", reason: "row_cap", truncated_at_ts: T0 + 2 } } });
-      ws.push({ channel: CH, event: EV, id: "live-21", seq: 21, data: {}, ts: T0 + 100 }); // live right after the incomplete replay
+      ws.push({ type: "replay_end", count: 1, sent: 1, matched: 1, complete: false, reason: "row_cap", last_seq: null, last_ts: null,
+        live_from_seq: 21, mode: "durable", retryable: true, retry_after_ms: 40, resume_ts_hint: T0 + 2, incomplete_channels: [CH2],
+        channels: { [CH]: { mode: "durable", sent: 1, complete: true, time_basis: "ingest_time" },
+                    [CH2]: { mode: "durable", sent: 0, complete: false, reason: "row_cap", retryable: true, retry_after_ms: 40, truncated_at_ts: T0 + 2, time_basis: "storage_id" } } });
+      ws.push({ channel: CH, event: EV, id: "live-21", seq: 21, data: {}, ts: T0 + 100 }); // live right after
       return false;
     }
-    ws.push(durable(CH2, 2, T0 + 5));
-    ws.push({ type: "replay_end", count: 4, sent: 4, matched: 4, complete: true, reason: null, last_seq: null, last_ts: T0 + 100, live_from_seq: 30, mode: "durable", channels: {} });
+    ws.push({ type: "replay_end", count: 1, sent: 1, matched: 1, complete: true, reason: null, last_seq: 25, last_ts: T0 + 5,
+      live_from_seq: 30, mode: "durable", retryable: false, channels: {} });
     return false;
   };
   const { stream, events } = makeStream(server, { resume });
@@ -646,41 +652,129 @@ test("REGRESSION: row_cap on one channel → gap, committed cursor kept; a live 
   stream.subscribe([CH, CH2]);
   await until(() => ids.includes("live-21"), 3000, "live frame");
   assert.deepEqual(stream.getCursor(), resume, "committed cursor stays at the last safe point");
-  assert.equal(events.gap.length, 1);
-  assert.ok(events.gap[0].reasons.includes("row_cap"));
-  assert.equal(events.gap[0].nextStep, "backfill from REST with since=");
-  assert.equal(stream.getProgress().seq, 21, "progress did move");
+  assert.equal(events.gap[0].reason, "row_cap");
+  assert.equal(events.gap[0].permanent, false);
+  assert.equal(events.gap[0].retryable, true);
+  assert.equal(events.gap[0].retryAfterMs, 40);
+  assert.equal(events.gap[0].resumeTsHint, T0 + 2);
+  assert.equal(events.gap[0].channels[CH2].time_basis, "storage_id", "per-channel fields pass through");
+  assert.equal(stream.getProgress().seq, 21);
   assert.equal(stream.isRecoveryIncomplete(), true);
-  server.last.serverClose(1006);
-  await until(() => server.subscribes.length === 2, 3000, "second subscribe");
-  assert.deepEqual(server.subscribes[1].resume, resume, "the unrecovered range is requested again");
+  // …and the client resumes again on the SAME socket after retry_after_ms, from the hint ts.
+  await until(() => server.subscribes.length === 2, 3000, "auto re-resume");
+  assert.deepEqual(server.subscribes[1].resume, { instance: "old", seq: 50, ts: T0 + 2 });
+  assert.equal(server.sockets.length, 1, "no reconnect was needed");
   await until(() => events.replay.length === 2, 3000, "second replay");
-  assert.deepEqual(ids, [`${CH}-1`, `${CH}-2`, `${CH2}-1`, "live-21", `${CH2}-2`], "duplicates dropped by id");
   assert.equal(stream.isRecoveryIncomplete(), false);
-  assert.deepEqual(stream.getCursor(), { instance: "inst-A", seq: 29, ts: T0 + 100 });
+  assert.deepEqual(stream.getCursor(), { instance: "inst-A", seq: 25, ts: T0 + 5 });
 });
 
-test("best_effort / incomplete channel (late-write signalling) is not a safe recovery", async () => {
+test("final gaps only (retryable:false) are reported once and committed", async () => {
+  const server = new FakeServer();
+  const resume = { instance: "old", seq: 50, ts: T0 };
+  server.onSubscribe = (ws, msg) => {
+    ackEcho(ws, msg);
+    ws.push({ type: "replay_start", mode: "durable", resume: true });
+    ws.push(durable(CH, 1, T0 + 1));
+    ws.push({ type: "replay_end", count: 1, sent: 1, matched: 1, complete: false, reason: "not_reconstructable", last_seq: 7, last_ts: T0 + 9,
+      live_from_seq: 8, mode: "durable", retryable: false, incomplete_channels: [CH2],
+      channels: { [CH]: { mode: "durable", sent: 1, complete: true },
+                  [CH2]: { mode: "none", sent: 0, complete: false, gap: "not_reconstructable", cause: "instance_changed" } } });
+    return false;
+  };
+  const { stream, events } = makeStream(server, { resume });
+  stream.subscribe([CH, CH2]);
+  await until(() => events.gap.length === 1, 2000, "gap");
+  assert.equal(events.gap[0].permanent, true);
+  assert.equal(events.gap[0].retryable, false);
+  // The SDK, not the user, decides to continue — and says so before it does.
+  assert.equal(events.gap[0].advancedPastGap, true);
+  assert.equal(events.gap[0].source, "auto");
+  assert.deepEqual(events.gap[0].skipped.channels, [CH2]);
+  assert.deepEqual(events.gap[0].skipped.from, resume);
+  assert.deepEqual(events.gap[0].skipped.to, { instance: "inst-A", seq: 7, ts: T0 + 9 });
+  assert.deepEqual(stream.getCursor(), { instance: "inst-A", seq: 7, ts: T0 + 9 }, "committed as if complete");
+  assert.equal(stream.isRecoveryIncomplete(), false);
+  await sleep(80);
+  assert.equal(server.subscribes.length, 1, "final gaps are not retried");
+  assert.equal(events.gap.length, 1);
+});
+
+test("mixed final + retryable gap keeps the committed cursor", async () => {
+  const server = new FakeServer();
+  const resume = { instance: "old", seq: 50, ts: T0 };
+  server.onSubscribe = (ws, msg) => {
+    ackEcho(ws, msg);
+    ws.push({ type: "replay_start", mode: "durable" });
+    ws.push({ type: "replay_end", count: 0, sent: 0, matched: 0, complete: false, reason: "source_busy", last_seq: 9, last_ts: T0 + 9,
+      live_from_seq: 10, mode: "durable", retryable: true, retry_after_ms: 10_000,
+      channels: { [CH]: { mode: "durable", sent: 0, complete: false, reason: "source_busy", retryable: true, retry_after_ms: 10_000 },
+                  [CH2]: { mode: "none", sent: 0, complete: false, gap: "not_reconstructable" } } });
+    return false;
+  };
+  const { stream, events } = makeStream(server, { resume });
+  stream.subscribe([CH, CH2]);
+  await until(() => events.gap.length === 1, 2000, "gap");
+  assert.deepEqual(events.gap[0].reasons, ["source_busy", "not_reconstructable"]);
+  assert.equal(events.gap[0].permanent, false, "one transient reason makes the whole resume retryable");
+  assert.deepEqual(stream.getCursor(), resume);
+  assert.equal(stream.isRecoveryIncomplete(), true);
+});
+
+test("late_ingest_possible channel is a transient gap; acceptGap() is the way out", async () => {
   const server = new FakeServer();
   const resume = { instance: "old", seq: 50, ts: T0 };
   server.onSubscribe = (ws, msg) => {
     ackEcho(ws, msg);
     ws.push({ type: "replay_start", mode: "durable" });
     ws.push(durable(CH, 1, T0 + 1));
-    ws.push({ type: "replay_end", count: 1, sent: 1, matched: 1, complete: true, reason: null, last_ts: T0 + 1, live_from_seq: 3, mode: "durable",
-      channels: { [CH]: { mode: "durable", sent: 1, complete: true, best_effort: true, time_basis: "block_time", reason: "late_ingest", next_step: "re-read via REST since=" } } });
+    ws.push({ type: "replay_end", count: 1, sent: 1, matched: 1, complete: false, reason: "late_ingest_possible", last_seq: null, last_ts: T0 + 1,
+      live_from_seq: 3, mode: "durable", retryable: true, retry_after_ms: 10_000,
+      channels: { [CH]: { mode: "durable", sent: 1, complete: false, reason: "late_ingest_possible", retryable: true, time_basis: "event_time", late_ingest_possible: true } } });
     return false;
   };
   const { stream, events } = makeStream(server, { resume });
   stream.subscribe([CH]);
   await until(() => events.gap.length === 1, 2000, "gap");
-  assert.deepEqual(events.gap[0].reasons, ["late_ingest"]);
-  assert.equal(events.gap[0].nextStep, "re-read via REST since=");
+  assert.deepEqual(events.gap[0].reasons, ["late_ingest_possible"]);
+  assert.equal(events.gap[0].permanent, false);
   assert.deepEqual(stream.getCursor(), resume);
-  // acceptGap() is the explicit way out.
+  const before = events.gap.length;
   stream.acceptGap();
+  assert.equal(events.gap.length, before + 1, "the manual advance is reported too");
+  assert.equal(events.gap[before].source, "manual");
+  assert.equal(events.gap[before].advancedPastGap, true);
+  assert.deepEqual(events.gap[before].skipped.from, resume);
   assert.equal(stream.isRecoveryIncomplete(), false);
   assert.equal(stream.getCursor().ts, T0 + 1);
+});
+
+test("onUnrecoverableGap stop: keeps the cursor, stops the stream and hands over via fatal", async () => {
+  const server = new FakeServer();
+  const resume = { instance: "old", seq: 50, ts: T0 };
+  server.onSubscribe = (ws, msg) => {
+    ackEcho(ws, msg);
+    ws.push({ type: "replay_start", mode: "durable" });
+    ws.push({ type: "replay_end", count: 0, sent: 0, matched: 0, complete: false, reason: "window_exceeded", last_seq: 9, last_ts: T0 + 9,
+      live_from_seq: 10, mode: "durable", retryable: false, limits: { max_age_ms: 3_600_000, max_rows_per_channel: 2000 },
+      channels: { [CH]: { mode: "durable", sent: 0, complete: false, reason: "window_exceeded" } } });
+    return false;
+  };
+  const { stream, events } = makeStream(server, { resume, onUnrecoverableGap: "stop" });
+  stream.subscribe([CH]);
+  await until(() => events.fatal.length === 1, 2000, "fatal");
+  assert.equal(events.gap.length, 1);
+  assert.equal(events.gap[0].advancedPastGap, false, "strict mode does not skip anything");
+  assert.equal(events.gap[0].skipped.to, null);
+  assert.deepEqual(events.gap[0].limits, { max_age_ms: 3_600_000, max_rows_per_channel: 2000 });
+  assert.equal(events.fatal[0].reason, "unrecoverable gap: window_exceeded");
+  assert.equal(events.fatal[0].gap.reason, "window_exceeded");
+  assert.deepEqual(stream.getCursor(), resume, "cursor untouched — the caller decides");
+  await sleep(80);
+  assert.equal(server.sockets.length, 1, "stopped: no reconnect");
+  // The caller can take the gap and continue.
+  stream.acceptGap();
+  assert.equal(stream.isRecoveryIncomplete(), false);
 });
 
 test("async replayed handlers: the complete-replay commit waits for them", async () => {
@@ -689,7 +783,7 @@ test("async replayed handlers: the complete-replay commit waits for them", async
     ackEcho(ws, msg);
     ws.push({ type: "replay_start", mode: "durable" });
     ws.push(durable(CH, 1, T0 + 1));
-    ws.push({ type: "replay_end", count: 1, sent: 1, matched: 1, complete: true, last_ts: T0 + 1, live_from_seq: 3, mode: "durable", channels: {} });
+    ws.push({ type: "replay_end", count: 1, sent: 1, matched: 1, complete: true, last_seq: 2, last_ts: T0 + 1, live_from_seq: 3, mode: "durable", retryable: false, channels: {} });
     return false;
   };
   const stream = new Stream({ getToken: async () => ({ token: "t", ws_url: "wss://x" }), WebSocketImpl: server.Impl, resume: { instance: "old", seq: 50, ts: T0 } });
