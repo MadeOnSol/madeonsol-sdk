@@ -124,9 +124,20 @@ export interface StreamWarning {
 }
 
 /**
- * Resume cursor: the position of the LAST frame whose handlers finished
- * processing ("processed" = every handler for that frame returned, or the
- * promise it returned settled). `instance` identifies the server process
+ * Resume cursor = the last SAFE point: every event up to it has been
+ * processed ("processed" = every handler for that frame returned, or the
+ * promise it returned settled). Two positions are kept:
+ *  - `getProgress()` — what has been received and handled, including replayed frames;
+ *  - `getCursor()` — the COMMITTED cursor, the only one to persist and resume from.
+ * Live frames commit as they are processed. During a resume, replayed frames
+ * are delivered but do NOT commit (the server replays channel by channel): the
+ * cursor moves to the server's `last_seq` / `last_ts` only when
+ * `replay_end` says `complete: true` with no incomplete / best-effort
+ * channel. After an INCOMPLETE recovery (or a close mid-replay) it stays at
+ * the pre-resume point, and later live frames are delivered but not committed
+ * until a recovery completes — so the next reconnect re-requests the
+ * unrecovered range (duplicates are dropped by id). Call `acceptGap()` once
+ * you have backfilled (or decided to skip) the range. `instance` identifies the server process
  * (seq restarts when it changes), `seq` is the server's global ordinal and
  * `ts` the frame time in ms. Delivery is at-least-once: after a resume you may
  * see a frame again — dedupe by `evt.id` (the client already drops ids it saw
@@ -207,8 +218,10 @@ export interface StreamGap {
   reasons: string[];
   /** Per-channel entries the server reported as incomplete / not reconstructable. */
   channels: Record<string, unknown>;
-  /** The cursor the resume started from. */
+  /** The cursor the resume started from (the committed cursor stays there). */
   from: StreamCursor | null;
+  /** The server's suggested next step (e.g. backfill from REST), when it gives one. */
+  nextStep: string | null;
   replay: StreamReplayResult;
 }
 
@@ -311,6 +324,9 @@ interface Recovery {
   duplicates: number;
   /** Live frames held back while a client-side (legacy) replay runs. */
   held: Frame[];
+  /** Highest seq / ts among replayed frames (commit fallback for older servers). */
+  maxSeq: number | null;
+  maxTs: number | null;
   timer: ReturnType<typeof setTimeout> | null;
 }
 
@@ -318,6 +334,16 @@ const HELD_LIVE_CAP = 10_000;
 
 function isThenable(v: unknown): v is PromiseLike<unknown> {
   return !!v && (typeof v === "object" || typeof v === "function") && typeof (v as { then?: unknown }).then === "function";
+}
+
+/** Move a cursor to `pos`: never back within one instance; seq:null frames only advance time. */
+function stepCursor(c: StreamCursor | null, pos: Position): StreamCursor | null {
+  if (pos.seq !== null && pos.instance) {
+    if (c && c.instance === pos.instance) return { instance: c.instance, seq: Math.max(c.seq, pos.seq), ts: Math.max(c.ts, pos.ts) };
+    return { instance: pos.instance, seq: pos.seq, ts: pos.ts };
+  }
+  // Unsequenced frame (durable backfill, seq:null): keep the last real seq, advance time.
+  return c ? { ...c, ts: Math.max(c.ts, pos.ts) } : null;
 }
 
 function validCursor(c: unknown): StreamCursor | null {
@@ -345,9 +371,14 @@ export class MadeOnSolStream {
   private serverInstance: string | null = null;
   /** Whether this connection already sent its first subscribe (the only one that resumes). */
   private firstSubscribeSent = false;
+  /** COMMITTED (safe) cursor — the one to persist and resume from. */
   private cursor: StreamCursor | null;
+  /** Received progress — every handled frame, including replayed ones. */
+  private progress: StreamCursor | null;
+  /** true after an incomplete recovery: live frames are not committed until one completes. */
+  private unsafe = false;
   private seen = new Map<string, true>();
-  private inflight: Array<{ pos: Position | null; done: boolean }> = [];
+  private inflight: Array<{ pos: Position | null; commit: boolean; done: boolean }> = [];
   private recovery: Recovery | null = null;
 
   constructor(opts: StreamClientOptions) {
@@ -364,6 +395,7 @@ export class MadeOnSolStream {
       legacyReplayTimeoutMs: Math.max(0, opts.legacyReplayTimeoutMs ?? 15_000),
     };
     this.cursor = validCursor(opts.resume);
+    this.progress = this.cursor ? { ...this.cursor } : null;
   }
 
   /** Register a handler. Use an event name, `"*"` for every event, or a lifecycle event.
@@ -388,9 +420,33 @@ export class MadeOnSolStream {
     return this;
   }
 
-  /** The resume cursor (last fully processed frame), or null before the first one. */
+  /** The COMMITTED resume cursor (last safe point) — persist this one. Null before the first. */
   getCursor(): StreamCursor | null {
     return this.cursor ? { ...this.cursor } : null;
+  }
+
+  /** Received progress: the last handled frame, replayed ones included (NOT safe to resume from). */
+  getProgress(): StreamCursor | null {
+    return this.progress ? { ...this.progress } : null;
+  }
+
+  /** true while an incomplete recovery holds the committed cursor back. */
+  isRecoveryIncomplete(): boolean {
+    return this.unsafe;
+  }
+
+  /**
+   * Accept the last reported gap: commit the received progress as the cursor
+   * and let live frames commit again. Call it after you backfilled the range
+   * the `"gap"` event named (or decided you do not need it).
+   */
+  acceptGap(): void {
+    this.unsafe = false;
+    const p = this.progress;
+    const c = this.cursor;
+    if (!p || (c && c.instance === p.instance && c.seq === p.seq && c.ts === p.ts)) return;
+    this.cursor = { ...p };
+    this.emit("cursor", { ...p });
   }
 
   private emit(event: string, data: unknown, evt?: StreamEvent): void {
@@ -491,8 +547,9 @@ export class MadeOnSolStream {
     this.clearHeartbeat();
     this.ws = null;
     this.serverInstance = null;
-    // Frames held back for an unfinished recovery are dropped undelivered: the
-    // cursor never moved past them, so the next resume asks for them again.
+    // An unfinished recovery is abandoned: its held live frames are dropped
+    // undelivered, and replayed frames never moved the cursor, so the next
+    // resume starts from the same pre-resume position.
     this.dropRecovery();
     this.emit("close", { code, reason });
     if (this.closedByUser || this.stopped) return;
@@ -535,6 +592,7 @@ export class MadeOnSolStream {
       this.recovery = {
         protocol: "detect", from, channels, request: { resume: from }, acked: false, suppressAck: false,
         instanceChanged: false, start: null, received: 0, delivered: 0, duplicates: 0, held: [], timer: null,
+        maxSeq: null, maxTs: null,
       };
     }
     this.firstSubscribeSent = true;
@@ -573,9 +631,15 @@ export class MadeOnSolStream {
     // A v1 server answers with complete/sent/matched; an older one with count only.
     const v1 = !!end && ("complete" in end || "sent" in end || "matched" in end);
     if (r.start?.replay_truncated === true || end?.replay_truncated === true) reasons.push("ring_truncated");
+    let nextStep: string | null = null;
+    const str = (v: unknown) => (typeof v === "string" && v ? v : null);
     if (!end) reasons.push("replay_timeout");
     else if (v1) {
-      if (end.complete === false) reasons.push(typeof end.reason === "string" && end.reason ? end.reason : "incomplete");
+      if (end.complete === false) reasons.push(str(end.reason) ?? "incomplete");
+      // Late-write signalling: a best-effort / incomplete replay is not a safe recovery.
+      if (end.best_effort === true) reasons.push(str(end.best_effort_reason) ?? "best_effort");
+      if (end.incomplete === true) reasons.push(str(end.reason) ?? "incomplete");
+      nextStep = str(end.next_step);
       const chs = end.channels;
       if (chs && typeof chs === "object") {
         for (const [ch, raw] of Object.entries(chs as Record<string, unknown>)) {
@@ -583,10 +647,12 @@ export class MadeOnSolStream {
           if (ch === "token:prices") continue;
           const info = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
           const gap = info.gap;
-          if (info.complete === false || gap || info.mode === "none") {
+          const bestEffort = info.best_effort === true;
+          if (info.complete === false || gap || info.mode === "none" || bestEffort || info.incomplete === true) {
             gapChannels[ch] = raw;
             const gr = gap && typeof gap === "object" ? (gap as Record<string, unknown>).reason : gap;
-            reasons.push(typeof gr === "string" && gr ? gr : info.mode === "none" ? "not_reconstructable" : "incomplete");
+            reasons.push(str(info.reason) ?? str(gr) ?? (info.mode === "none" ? "not_reconstructable" : bestEffort ? str(info.best_effort_reason) ?? "best_effort" : "incomplete"));
+            nextStep = nextStep ?? str(info.next_step);
           }
         }
       }
@@ -610,9 +676,25 @@ export class MadeOnSolStream {
       start: r.start,
       end,
     };
+    // Commit: only a COMPLETE replay moves the committed cursor, to the
+    // server's own last_seq / last_ts (the replay is channel-by-channel, so a
+    // partial one must not advance it). Queued behind replayed handlers still
+    // in flight. An incomplete one leaves it at the pre-resume position and
+    // marks the stream unsafe: live frames are delivered but not committed
+    // until a later recovery completes (or you call acceptGap()).
+    if (uniq.length === 0) {
+      this.unsafe = false;
+      const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+      const liveFrom = v1 ? num(end?.live_from_seq) : null;
+      const seq = num(end?.last_seq) ?? (liveFrom !== null ? liveFrom - 1 : null) ?? r.maxSeq;
+      const cts = num(end?.last_ts) ?? r.maxTs ?? this.cursor?.ts ?? null;
+      if (cts !== null) this.enqueue({ instance: this.serverInstance, seq: seq !== null && seq >= 0 ? seq : null, ts: cts }, true);
+    } else {
+      this.unsafe = true;
+    }
     this.emit("replay", result);
     if (uniq.length > 0) {
-      this.emit("gap", { reason: uniq[0], reasons: uniq, channels: gapChannels, from: r.from, replay: result } satisfies StreamGap);
+      this.emit("gap", { reason: uniq[0], reasons: uniq, channels: gapChannels, from: r.from, nextStep, replay: result } satisfies StreamGap);
     }
     // Live frames that arrived during a client-side replay go out now, after it.
     for (const f of r.held) this.deliver(f);
@@ -650,8 +732,10 @@ export class MadeOnSolStream {
           if (echo && typeof echo === "object" && (echo as Record<string, unknown>).accepted === false) {
             // Refused (e.g. replay_in_progress): no replay follows, and this is
             // a v1 server — no waiting, no legacy fallback. The server's own
-            // warning frame explains why.
+            // warning frame explains why. Nothing was recovered, so the
+            // committed cursor must not move until a later recovery completes.
             this.dropRecovery();
+            this.unsafe = true;
           } else if ("resume" in msg) r.protocol = "resume"; // server echoed resume: it understood
           else r.timer = setTimeout(() => this.fallbackToLegacy(), this.opts.resumeDetectMs);
         }
@@ -664,6 +748,7 @@ export class MadeOnSolStream {
           r = this.recovery = {
             protocol: "resume", from: null, channels: [], request: {}, acked: true, suppressAck: false,
             instanceChanged: false, start: null, received: 0, delivered: 0, duplicates: 0, held: [], timer: null,
+            maxSeq: null, maxTs: null,
           };
         }
         if (r.protocol === "detect") {
@@ -677,6 +762,18 @@ export class MadeOnSolStream {
         this.finishRecovery(msg);
         return;
       case "warning":
+        if (msg.code === "channels_revoked") {
+          // The server dropped these (e.g. plan downgrade): stop re-subscribing them.
+          const names = new Set<string>();
+          if (Array.isArray(msg.channels)) for (const c of msg.channels) if (typeof c === "string") names.add(c);
+          if (Array.isArray(msg.revoked)) {
+            for (const x of msg.revoked) {
+              if (typeof x === "string") names.add(x);
+              else if (x && typeof x === "object" && typeof (x as { channel?: unknown }).channel === "string") names.add((x as { channel: string }).channel);
+            }
+          }
+          for (const c of names) this.desired.channels.delete(c as StreamChannel);
+        }
         // Never swallow a server warning: a rejected/revoked channel is silent.
         this.emit("warning", msg as StreamWarning);
         return;
@@ -704,6 +801,11 @@ export class MadeOnSolStream {
   /** Dedupe by id, hand the frame to the handlers, track completion for the cursor. */
   private deliver(msg: Frame): void {
     const inReplay = msg.replayed === true && msg.recovered !== "bus";
+    if (inReplay && this.recovery) {
+      const r = this.recovery;
+      if (typeof msg.seq === "number" && Number.isFinite(msg.seq)) r.maxSeq = Math.max(r.maxSeq ?? msg.seq, msg.seq);
+      if (typeof msg.ts === "number" && Number.isFinite(msg.ts)) r.maxTs = Math.max(r.maxTs ?? msg.ts, msg.ts);
+    }
     const id = typeof msg.id === "string" || typeof msg.id === "number" ? String(msg.id) : null;
     if (id !== null && this.opts.dedupeSize > 0) {
       const key = `${String(msg.channel)}\u0000${id}`;
@@ -724,14 +826,19 @@ export class MadeOnSolStream {
     const evt = { ...msg, replayed: msg.replayed === true || (!!data && typeof data === "object" && data.replayed === true) } as unknown as StreamEvent;
     const seq = typeof msg.seq === "number" && Number.isFinite(msg.seq) ? msg.seq : null;
     const ts = typeof msg.ts === "number" && Number.isFinite(msg.ts) ? msg.ts : null;
-    // Only sequenced/identified frames move the cursor (token:price ticks are state, not a log).
+    // Only sequenced/identified frames move the cursor (token:price ticks are
+    // state, not a log) — and none while a recovery runs: finishRecovery()
+    // commits the server's replay_end position if, and only if, it is complete.
     const pos: Position | null = (seq !== null || id !== null) && ts !== null ? { instance: this.serverInstance, seq, ts } : null;
+    // Progress always moves; the COMMITTED cursor only for live frames outside
+    // a recovery and not after an incomplete one (see finishRecovery).
+    const commit = !this.recovery && !this.unsafe;
     const results: unknown[] = [];
     this.callHandlers(evt.event, evt.data, evt, results);
     this.callHandlers("*", evt.data, evt, results);
     const pending = results.filter(isThenable);
-    if (pending.length === 0 && this.inflight.length === 0) { if (pos) this.advance(pos); return; }
-    const entry = { pos, done: pending.length === 0 };
+    if (pending.length === 0 && this.inflight.length === 0) { if (pos) this.apply(pos, commit); return; }
+    const entry = { pos, commit, done: pending.length === 0 };
     this.inflight.push(entry);
     if (entry.done) { this.drainInflight(); return; }
     void Promise.allSettled(pending).then((settled) => {
@@ -744,26 +851,24 @@ export class MadeOnSolStream {
   private drainInflight(): void {
     while (this.inflight.length > 0 && this.inflight[0].done) {
       const e = this.inflight.shift()!;
-      if (e.pos) this.advance(e.pos);
+      if (e.pos) this.apply(e.pos, e.commit);
     }
   }
 
-  private advance(pos: Position): void {
+  /** Queue a position behind every frame still being handled (or apply it now). */
+  private enqueue(pos: Position, commit: boolean): void {
+    if (this.inflight.length === 0) this.apply(pos, commit);
+    else this.inflight.push({ pos, commit, done: true });
+  }
+
+  /** Move `progress` (always) and the committed cursor (when `commit`) to `pos`. */
+  private apply(pos: Position, commit: boolean): void {
+    const p = stepCursor(this.progress, pos);
+    if (p) this.progress = p;
+    if (!commit) return;
     const c = this.cursor;
-    let next: StreamCursor;
-    if (pos.seq !== null && pos.instance) {
-      if (c && c.instance === pos.instance) {
-        next = { instance: c.instance, seq: Math.max(c.seq, pos.seq), ts: Math.max(c.ts, pos.ts) };
-      } else {
-        next = { instance: pos.instance, seq: pos.seq, ts: pos.ts };
-      }
-    } else if (c) {
-      // Unsequenced frame (durable backfill, seq:null): keep the last real seq, advance time.
-      next = { ...c, ts: Math.max(c.ts, pos.ts) };
-    } else {
-      return;
-    }
-    if (c && c.instance === next.instance && c.seq === next.seq && c.ts === next.ts) return;
+    const next = stepCursor(c, pos);
+    if (!next || (c && c.instance === next.instance && c.seq === next.seq && c.ts === next.ts)) return;
     this.cursor = next;
     this.emit("cursor", { ...next });
   }
