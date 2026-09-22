@@ -150,9 +150,22 @@ export interface StreamEvent<T = unknown> {
    * Server-global ordinal. Gaps are NORMAL (it counts every channel and every
    * user) and are never evidence of loss — only a `"gap"` event is.
    */
-  seq?: number;
+  seq?: number | null;
   /** true when the frame was re-sent by a replay/backfill rather than live. */
   replayed?: boolean;
+  /**
+   * Where a replayed frame came from: "ring" (the server's in-memory buffer) or
+   * "durable" (rebuilt from storage — `seq` is then null).
+   */
+  mode?: "ring" | "durable";
+  /** true when a durable frame could not reproduce every live field — see `missing`. */
+  partial?: boolean;
+  /** Live payload keys a durable frame could not reproduce (they are absent, never guessed). */
+  missing?: string[];
+  /** "bus" for a live-path frame the server re-sent after its own event-bus reconnect. */
+  recovered?: string;
+  /** true on a token:price state snapshot sent at resume time. */
+  snapshot?: boolean;
 }
 
 /** Outcome of a resume, emitted as `"replay"` after the server's `replay_end`. */
@@ -172,6 +185,10 @@ export interface StreamReplayResult {
   duplicates: number;
   /** false when anything could not be recovered — a `"gap"` event follows. */
   complete: boolean;
+  /** Server's replay mode ("ring" | "durable"), null on an older server. */
+  mode: string | null;
+  /** Why the server could not use its ring (e.g. "instance_changed", "ring_truncated"), or null. */
+  resumeReason: string | null;
   /** Raw `replay_start` frame (null if none arrived). */
   start: Record<string, unknown> | null;
   /** Raw `replay_end` frame (null on a client-side timeout). */
@@ -512,7 +529,7 @@ export class MadeOnSolStream {
     if (Object.keys(this.desired.filters).length > 0) msg.filters = this.desired.filters;
     // Only the FIRST subscribe of a connection resumes; a later subscribe adds
     // channels live (the server replays only the channels named in a subscribe).
-    if (!this.firstSubscribeSent && this.cursor) {
+    if (!this.firstSubscribeSent && this.cursor && !this.recovery) {
       const from = { ...this.cursor };
       msg.resume = from;
       this.recovery = {
@@ -562,6 +579,8 @@ export class MadeOnSolStream {
       const chs = end.channels;
       if (chs && typeof chs === "object") {
         for (const [ch, raw] of Object.entries(chs as Record<string, unknown>)) {
+          // token:prices is a state stream: the server re-sends a snapshot, never a log.
+          if (ch === "token:prices") continue;
           const info = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
           const gap = info.gap;
           if (info.complete === false || gap || info.mode === "none") {
@@ -586,6 +605,8 @@ export class MadeOnSolStream {
       delivered: r.delivered,
       duplicates: r.duplicates,
       complete: uniq.length === 0,
+      mode: typeof end?.mode === "string" ? end.mode : null,
+      resumeReason: typeof end?.resume_reason === "string" ? end.resume_reason : null,
       start: r.start,
       end,
     };
@@ -625,7 +646,13 @@ export class MadeOnSolStream {
         this.emit("subscribed", msg.channels);
         if (r && r.protocol === "detect" && !r.acked) {
           r.acked = true;
-          if ("resume" in msg) r.protocol = "resume"; // server echoed resume: it understood
+          const echo = msg.resume;
+          if (echo && typeof echo === "object" && (echo as Record<string, unknown>).accepted === false) {
+            // Refused (e.g. replay_in_progress): no replay follows, and this is
+            // a v1 server — no waiting, no legacy fallback. The server's own
+            // warning frame explains why.
+            this.dropRecovery();
+          } else if ("resume" in msg) r.protocol = "resume"; // server echoed resume: it understood
           else r.timer = setTimeout(() => this.fallbackToLegacy(), this.opts.resumeDetectMs);
         }
         return;
@@ -657,7 +684,8 @@ export class MadeOnSolStream {
         break;
     }
     if (!msg.channel || !msg.event) return;
-    const inReplay = msg.replayed === true;
+    // Bus-recovered frames (recovered:"bus") are re-sent live, not part of a replay.
+    const inReplay = msg.replayed === true && msg.recovered !== "bus";
     const r = this.recovery;
     if (r) {
       if (!inReplay && r.protocol === "detect" && r.acked) this.fallbackToLegacy(); // live before replay_start → old server
@@ -675,7 +703,7 @@ export class MadeOnSolStream {
 
   /** Dedupe by id, hand the frame to the handlers, track completion for the cursor. */
   private deliver(msg: Frame): void {
-    const inReplay = msg.replayed === true;
+    const inReplay = msg.replayed === true && msg.recovered !== "bus";
     const id = typeof msg.id === "string" || typeof msg.id === "number" ? String(msg.id) : null;
     if (id !== null && this.opts.dedupeSize > 0) {
       const key = `${String(msg.channel)}\u0000${id}`;
@@ -693,7 +721,7 @@ export class MadeOnSolStream {
     }
     if (inReplay && this.recovery) this.recovery.delivered++;
     const data = msg.data as Record<string, unknown> | undefined;
-    const evt = { ...msg, replayed: inReplay || (!!data && typeof data === "object" && data.replayed === true) } as unknown as StreamEvent;
+    const evt = { ...msg, replayed: msg.replayed === true || (!!data && typeof data === "object" && data.replayed === true) } as unknown as StreamEvent;
     const seq = typeof msg.seq === "number" && Number.isFinite(msg.seq) ? msg.seq : null;
     const ts = typeof msg.ts === "number" && Number.isFinite(msg.ts) ? msg.ts : null;
     // Only sequenced/identified frames move the cursor (token:price ticks are state, not a log).
@@ -730,7 +758,7 @@ export class MadeOnSolStream {
         next = { instance: pos.instance, seq: pos.seq, ts: pos.ts };
       }
     } else if (c) {
-      // Unsequenced frame (e.g. durable backfill without a seq): time only.
+      // Unsequenced frame (durable backfill, seq:null): keep the last real seq, advance time.
       next = { ...c, ts: Math.max(c.ts, pos.ts) };
     } else {
       return;

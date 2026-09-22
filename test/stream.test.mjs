@@ -56,7 +56,7 @@ function fakeSocketClass(server) {
  * mode "legacy" is today's server (ignores `resume`, honours replay_since_*).
  */
 class FakeServer {
-  constructor({ mode = "v1", instance = "inst-A", echoResume = false } = {}) {
+  constructor({ mode = "v1", instance = "inst-A", echoResume = true } = {}) {
     this.mode = mode;
     this.instance = instance;
     this.echoResume = echoResume;
@@ -82,18 +82,27 @@ class FakeServer {
     const ack = { type: "subscribed", channels: msg.channels, seq: this.seq, instance: this.instance, ts: Date.now() };
     if (this.onSubscribe && this.onSubscribe(ws, msg) === false) return;
     if (this.mode === "v1") {
-      if (this.echoResume && msg.resume) ack.resume = msg.resume;
+      // PR #81: the ack echoes resume {…, accepted}; replay_start … replay_end
+      // always precede live frames; durable frames carry seq:null, mode:"durable".
+      if (this.echoResume && msg.resume) ack.resume = { ...msg.resume, accepted: true };
       ws.push(ack);
       if (msg.resume) {
         const r = msg.resume;
         const same = r.instance === this.instance;
+        const mode = same ? "ring" : "durable";
         const out = this.ring.filter((f) => (same ? f.seq > r.seq : f.ts > r.ts));
-        ws.push({ type: "replay_start", ts: Date.now() });
-        for (const f of out) ws.push({ ...f, replayed: true });
+        ws.push({ type: "replay_start", mode, count: same ? out.length : null, ...(same ? {} : { resume: true, reason: "instance_changed", since_ts: r.ts }), ts: Date.now() });
+        for (const f of out) {
+          ws.push(same ? { ...f, replayed: true, mode: "ring" } : { ...f, seq: null, replayed: true, mode: "durable", ...(this.durableMissing ? { partial: true, missing: this.durableMissing } : {}) });
+        }
+        const last = out[out.length - 1];
         ws.push(this.v1Result ?? {
-          type: "replay_end", sent: out.length, matched: out.length, complete: true, reason: null,
-          last_seq: this.seq, live_from_seq: this.seq + 1,
-          channels: { [CH]: { mode: same ? "ring" : "durable", sent: out.length, complete: true } }, ts: Date.now(),
+          type: "replay_end", count: out.length, sent: out.length, matched: out.length, complete: true, reason: null,
+          last_seq: same && last ? last.seq : null, last_ts: last ? last.ts : null, live_from_seq: this.seq + 1,
+          mode, resume_reason: same ? null : "instance_changed",
+          channels: { [CH]: { mode, sent: out.length, complete: true, ...(this.durableMissing ? { partial: true, missing: this.durableMissing } : {}) } },
+          limits: same ? undefined : { max_age_ms: 3_600_000, max_rows_per_channel: 5000, max_rows_total: 20000, slack_ms: 30000 },
+          ts: Date.now(),
         });
         this.v1Result = null;
       }
@@ -306,16 +315,100 @@ test("legacy server: fewer replayed frames than replay_end.count → backpressur
   stream.close();
 });
 
-test("v1 server: resume echo on the ack skips detection; instance change uses the cursor ts", async () => {
-  const server = new FakeServer({ echoResume: true });
-  const { stream, got, events } = makeStream(server, { resume: { instance: "old", seq: 50, ts: 1_000_010 } });
+test("v1 server: resume echo on the ack skips detection; instance change → durable frames keep the last real seq", async () => {
+  const server = new FakeServer();
+  server.durableMissing = ["slot", "fdv_usd_at_trade"];
+  const { stream, got, events } = makeStream(server, { resume: { instance: "old", seq: 50, ts: 1_000_010 }, resumeDetectMs: 5_000 });
+  const evts = [];
+  stream.on(EV, (d, evt) => { evts.push(evt); });
   server.frame({ seq: 11 }); // ts 1_000_011 > cursor ts → durable-backfilled
   stream.subscribe([CH]);
   await until(() => events.replay.length === 1, 3000, "replay");
   assert.deepEqual(server.subscribes[0].resume, { instance: "old", seq: 50, ts: 1_000_010 }, "constructor resume option is used");
   assert.equal(server.subscribes.length, 1, "no legacy fallback against a v1 server");
-  assert.deepEqual(got.map((g) => g.seq), [11]);
-  assert.deepEqual(stream.getCursor(), { instance: "inst-A", seq: 11, ts: 1_000_011 });
+  assert.deepEqual(got.map((g) => g.seq), [null]);
+  // Durable frame: seq null, partial/missing passed through to the handler.
+  assert.equal(evts[0].mode, "durable");
+  assert.equal(evts[0].partial, true);
+  assert.deepEqual(evts[0].missing, ["slot", "fdv_usd_at_trade"]);
+  // The cursor never regresses on seq:null: last real seq kept, ts advanced.
+  assert.deepEqual(stream.getCursor(), { instance: "old", seq: 50, ts: 1_000_011 });
+  assert.equal(events.replay[0].mode, "durable");
+  assert.equal(events.replay[0].resumeReason, "instance_changed");
+  assert.equal(events.gap.length, 0);
+  // A later live frame on the new instance replaces the cursor wholesale.
+  server.live(server.last, { seq: 12 });
+  await until(() => got.length === 2);
+  assert.deepEqual(stream.getCursor(), { instance: "inst-A", seq: 12, ts: 1_000_012 });
+  stream.close();
+});
+
+test("v1 server: an empty replay (sent:0, complete:true) completes at once — no detection wait, no gap", async () => {
+  const server = new FakeServer();
+  const { stream, events } = makeStream(server, { resume: { instance: "inst-A", seq: 0, ts: 1 }, resumeDetectMs: 5_000, legacyReplayTimeoutMs: 5_000 });
+  const t0 = Date.now();
+  stream.subscribe([CH]);
+  await until(() => events.replay.length === 1, 1000, "replay");
+  assert.ok(Date.now() - t0 < 1000);
+  assert.equal(events.replay[0].complete, true);
+  assert.equal(events.replay[0].received, 0);
+  assert.equal(events.gap.length, 0);
+  assert.equal(server.subscribes.length, 1);
+  stream.close();
+});
+
+test("resume refused (accepted:false, replay_in_progress): no waiting, no legacy fallback, live flows", async () => {
+  const server = new FakeServer();
+  server.onSubscribe = (ws, msg) => {
+    ws.push({ type: "subscribed", channels: msg.channels, instance: "inst-A", resume: { ...msg.resume, accepted: false, reason: "replay_in_progress" } });
+    ws.push({ type: "warning", code: "replay_in_progress", message: "A replay is already running", channels: msg.channels });
+    return false;
+  };
+  const { stream, got, events } = makeStream(server, { resume: { instance: "inst-A", seq: 3, ts: 1 }, resumeDetectMs: 30, legacyReplayTimeoutMs: 60 });
+  stream.subscribe([CH]);
+  await until(() => events.warning.length === 1, 1000, "warning");
+  server.live(server.last, { seq: 9 });
+  await until(() => got.length === 1, 1000, "live frame");
+  await sleep(150); // well past resumeDetectMs + legacyReplayTimeoutMs
+  assert.equal(events.warning[0].code, "replay_in_progress");
+  assert.equal(server.subscribes.length, 1, "no legacy re-subscribe");
+  assert.equal(events.replay.length, 0);
+  assert.equal(events.gap.length, 0);
+  assert.equal(stream.getCursor().seq, 9);
+  stream.close();
+});
+
+test("bus-recovered frames (replayed:true, recovered:\"bus\") are delivered live, flagged, deduped", async () => {
+  const server = new FakeServer();
+  const { stream, got } = makeStream(server);
+  const evts = [];
+  stream.on(EV, (d, evt) => { evts.push(evt); });
+  stream.subscribe([CH]);
+  await until(() => server.subscribes.length === 1);
+  const f1 = server.live(server.last, { seq: 1 });
+  server.last.push({ ...server.frame({ seq: 2 }), replayed: true, recovered: "bus" });
+  server.last.push({ ...f1, seq: 3, replayed: true, recovered: "bus" }); // already delivered live
+  await until(() => got.length === 2);
+  await sleep(20);
+  assert.equal(got.length, 2);
+  assert.equal(evts[1].replayed, true);
+  assert.equal(evts[1].recovered, "bus");
+  assert.equal(stream.getCursor().seq, 2);
+  stream.close();
+});
+
+test("token:prices state-stream entry in replay_end is not a gap", async () => {
+  const server = new FakeServer();
+  server.v1Result = {
+    type: "replay_end", count: 0, sent: 0, matched: 0, complete: true, reason: null, last_seq: null, last_ts: null,
+    live_from_seq: 1, mode: "ring", resume_reason: null,
+    channels: { [CH]: { mode: "ring", sent: 0, complete: true }, "token:prices": { mode: "none", complete: false, gap: "state_stream", snapshot_sent: 2 } },
+  };
+  const { stream, events } = makeStream(server, { resume: { instance: "inst-A", seq: 0, ts: 1 } });
+  stream.subscribe([CH]);
+  await until(() => events.replay.length === 1, 1000, "replay");
+  assert.equal(events.replay[0].complete, true);
+  assert.equal(events.gap.length, 0);
   stream.close();
 });
 
