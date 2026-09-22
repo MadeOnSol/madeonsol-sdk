@@ -7,13 +7,18 @@
 import { MadeOnSolStream } from "./stream.js";
 import type { StreamClientOptions } from "./stream.js";
 
-export { MadeOnSolStream } from "./stream.js";
+export { MadeOnSolStream, STREAM_CHANNELS } from "./stream.js";
 export type {
   StreamClientOptions,
   StreamChannel,
   StreamEventName,
   StreamEvent,
   StreamLifecycleEvent,
+  StreamWarning,
+  StreamCursor,
+  StreamReplayResult,
+  StreamGap,
+  StreamFatal,
 } from "./stream.js";
 
 const BASE_URL = "https://madeonsol.com/api/v1";

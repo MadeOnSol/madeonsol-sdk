@@ -1,6 +1,6 @@
 {
   "name": "madeonsol",
-  "version": "2.27.0",
+  "version": "2.28.0",
   "description": "Official SDK for the MadeOnSol Solana API — KOL wallet tracking, Pump.fun deployer intelligence, and tool directory",
   "type": "module",
   "main": "dist/index.js",
@@ -17,6 +17,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "test": "npm run build && node --test test/stream.test.mjs",
     "route-parity": "node scripts/route-parity-check.mjs",
     "preflight": "bash ./scripts/preflight-publish.sh",
     "prepublishOnly": "npm run preflight && npm run build"
