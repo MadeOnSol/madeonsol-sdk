@@ -868,3 +868,57 @@ test("the automatic retry budget runs out visibly (gap.exhausted)", async () => 
   assert.deepEqual(stream.getCursor(), resume);
   assert.equal(stream.isRecoveryIncomplete(), true);
 });
+
+test("resume_ts_hint IS used when the other incomplete channel has a FINAL gap", async () => {
+  const server = new FakeServer();
+  const resume = { instance: "old", seq: 50, ts: T0 };
+  let n = 0;
+  server.onSubscribe = (ws, msg) => {
+    n++;
+    ackEcho(ws, msg);
+    ws.push({ type: "replay_start", mode: "durable" });
+    if (n === 1) {
+      ws.push(durable(CH, 1, T0 + 1));
+      ws.push({ type: "replay_end", count: 1, sent: 1, matched: 1, complete: false, reason: "row_cap",
+        last_seq: null, last_ts: null, live_from_seq: 9, mode: "durable", retryable: true, retry_after_ms: 30,
+        resume_ts_hint: T0 + 2, incomplete_channels: [CH, CH2],
+        channels: { [CH]: { mode: "durable", sent: 1, complete: false, reason: "row_cap", retryable: true, truncated_at_ts: T0 + 2 },
+                    [CH2]: { mode: "none", sent: 0, complete: false, gap: "not_reconstructable", retryable: false } } });
+      return false;
+    }
+    ws.push({ type: "replay_end", count: 0, sent: 0, matched: 0, complete: true, reason: null, last_seq: null,
+      last_ts: T0 + 4, live_from_seq: 12, mode: "durable", retryable: false, channels: {} });
+    return false;
+  };
+  const { stream, events } = makeStream(server, { resume });
+  stream.subscribe([CH, CH2]);
+  await until(() => server.subscribes.length === 2, 3000, "auto re-resume");
+  assert.deepEqual(server.subscribes[1].resume, { instance: "old", seq: 50, ts: T0 + 2 }, "a final gap does not block the hint");
+  assert.ok(events.gap[0].reasons.includes("not_reconstructable"), "the final gap is still reported");
+  assert.equal(events.gap[0].retryable, true);
+  await until(() => events.replay.length === 2, 3000, "second replay");
+  assert.deepEqual(stream.getCursor(), { instance: "old", seq: 50, ts: T0 + 4 });
+});
+
+test("the retry budget is per connection: a reconnect makes retries available again", async () => {
+  const server = new FakeServer();
+  const resume = { instance: "old", seq: 50, ts: T0 };
+  server.onSubscribe = (ws, msg) => {
+    ackEcho(ws, msg);
+    ws.push({ type: "replay_start", mode: "durable" });
+    ws.push({ type: "replay_end", count: 0, sent: 0, matched: 0, complete: false, reason: "source_busy", last_seq: null, last_ts: null,
+      live_from_seq: 3, mode: "durable", retryable: true, retry_after_ms: 15,
+      channels: { [CH]: { mode: "durable", sent: 0, complete: false, reason: "source_busy", retryable: true } } });
+    return false;
+  };
+  const { stream, events } = makeStream(server, { resume, maxResumeRetries: 1 });
+  stream.subscribe([CH]);
+  await until(() => events.gap.length === 2 && events.gap[1].exhausted === true, 3000, "budget spent");
+  const before = server.subscribes.length;
+  assert.equal(before, 2, "one subscribe + one retry");
+  server.last.serverClose(1006);
+  // New connection: one resume subscribe, and the budget is back (one more retry).
+  await until(() => server.subscribes.length === before + 2, 3000, "reconnect resume + retry");
+  assert.equal(events.gap[2].exhausted, false, "fresh budget on the new connection");
+  assert.deepEqual(stream.getCursor(), resume, "still not committed");
+});

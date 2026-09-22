@@ -404,10 +404,11 @@ function isThenable(v: unknown): v is PromiseLike<unknown> {
 
 /**
  * Fallback classification for servers that send no `retryable` flag: reasons
- * asking again can never fill. The server's own transient list is
- * backpressure | closed | source_busy | source_error | late_ingest_possible | row_cap.
+ * asking again can never fill.
  */
 const PERMANENT_GAPS = new Set(["not_reconstructable", "state_stream", "window_exceeded", "ring_truncated", "instance_changed"]);
+/** The server's transient list — a channel with one of these is worth asking again. */
+const TRANSIENT_GAPS = new Set(["backpressure", "closed", "source_busy", "source_error", "late_ingest_possible", "row_cap"]);
 function isPermanentGap(reason: string): boolean {
   return PERMANENT_GAPS.has(reason);
 }
@@ -594,6 +595,8 @@ export class MadeOnSolStream {
       this.ws = ws;
       this.serverInstance = null;
       this.firstSubscribeSent = false;
+      // The automatic re-resume budget is per CONNECTION (the docs say so).
+      this.resumeRetries = 0;
 
       ws.onopen = () => {
         if (this.ws !== ws) return;
@@ -757,8 +760,9 @@ export class MadeOnSolStream {
     if (r.timer) { clearTimeout(r.timer); r.timer = null; }
     this.recovery = null;
     const reasons: string[] = [];
-    /** Reasons of the channels the server reported incomplete (not the top-level one). */
+    /** Reasons of the channels the server reported incomplete, with their retryability. */
     const channelReasons: string[] = [];
+    const retryableChannelReasons: string[] = [];
     const gapChannels: Record<string, unknown> = {};
     const str = (v: unknown) => (typeof v === "string" && v ? v : null);
     const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -782,6 +786,7 @@ export class MadeOnSolStream {
             const chReason = str(info.reason) ?? str(gr) ?? (info.mode === "none" ? "not_reconstructable" : late ? "late_ingest_possible" : "incomplete");
             reasons.push(chReason);
             channelReasons.push(chReason);
+            if (info.retryable === true || (info.retryable !== false && TRANSIENT_GAPS.has(chReason))) retryableChannelReasons.push(chReason);
           }
         }
       }
@@ -838,12 +843,16 @@ export class MadeOnSolStream {
     // approval: it is reported on the gap event (advancedPastGap / skipped) and
     // `onUnrecoverableGap: "stop"` turns it off.
     // resume_ts_hint is a row_cap device: it says "everything up to here was
-    // sent for the capped channel". If ANY incomplete channel failed for a
-    // different reason (source_error, source_busy, …), resuming from the hint
-    // would skip that channel's range and the next reply would claim complete.
-    // Only trust it when every incomplete channel is row_cap — never rely on
-    // the server gating it.
-    const capOnly = (channelReasons.length > 0 ? channelReasons : uniq).every((x) => x === "row_cap");
+    // sent for the capped channel". If another channel is incomplete for a
+    // RETRYABLE reason (source_error, source_busy, …), resuming from the hint
+    // would step past its unread range and the next reply would claim complete.
+    // Channels with a FINAL gap are ignored here: asking again never recovers
+    // them anyway, and the gap event reports them. Same predicate as the
+    // server, checked here so the client never depends on it.
+    const capCandidates = retryableChannelReasons.length > 0
+      ? retryableChannelReasons
+      : channelReasons.length > 0 ? [] : uniq.filter((x) => TRANSIENT_GAPS.has(x));
+    const capOnly = capCandidates.length > 0 && capCandidates.every((x) => x === "row_cap");
     const exhausted = retryable && this.resumeRetries >= this.opts.maxResumeRetries;
     const strict = uniq.length > 0 && !retryable && this.opts.onUnrecoverableGap === "stop";
     const willAdvance = !retryable && !strict;
