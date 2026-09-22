@@ -21,6 +21,36 @@ async function until(pred, ms = 2000, what = "condition") {
   throw new Error(`timed out waiting for ${what}`);
 }
 
+/** A fake WebSocket class bound to one scripted server. */
+function fakeSocketClass(server) {
+  return class FakeWS {
+    constructor(url) {
+      this.url = url;
+      this.readyState = 0;
+      this.onopen = this.onmessage = this.onclose = this.onerror = null;
+      server.sockets.push(this);
+      setTimeout(() => {
+        if (this.readyState !== 0) return;
+        this.readyState = 1;
+        this.onopen?.({});
+        this.push({ type: "connected", seq: server.seq, instance: server.instance, ts: Date.now() });
+      }, 1);
+    }
+    send(raw) {
+      const msg = JSON.parse(raw);
+      if (msg.type === "subscribe") server.handleSubscribe(this, msg);
+    }
+    close(code = 1000, reason = "") { this.serverClose(code, reason); }
+    terminate() { this.serverClose(1006, ""); }
+    push(obj) { if (this.readyState === 1) this.onmessage?.({ data: JSON.stringify(obj) }); }
+    serverClose(code, reason = "") {
+      if (this.readyState === 3) return;
+      this.readyState = 3;
+      setTimeout(() => this.onclose?.({ code, reason }), 1);
+    }
+  };
+}
+
 /**
  * Scripted server. mode "v1" answers `resume` per the Phase 1 contract;
  * mode "legacy" is today's server (ignores `resume`, honours replay_since_*).
@@ -36,33 +66,7 @@ class FakeServer {
     this.subscribes = [];
     this.v1Result = null; // override the replay_end of the next v1 resume
     this.onSubscribe = null;
-    const server = this;
-    this.Impl = class FakeWS {
-      constructor(url) {
-        this.url = url;
-        this.readyState = 0;
-        this.onopen = this.onmessage = this.onclose = this.onerror = null;
-        server.sockets.push(this);
-        setTimeout(() => {
-          if (this.readyState !== 0) return;
-          this.readyState = 1;
-          this.onopen?.({});
-          this.push({ type: "connected", seq: server.seq, instance: server.instance, ts: Date.now() });
-        }, 1);
-      }
-      send(raw) {
-        const msg = JSON.parse(raw);
-        if (msg.type === "subscribe") server.handleSubscribe(this, msg);
-      }
-      close(code = 1000, reason = "") { this.serverClose(code, reason); }
-      terminate() { this.serverClose(1006, ""); }
-      push(obj) { if (this.readyState === 1) this.onmessage?.({ data: JSON.stringify(obj) }); }
-      serverClose(code, reason = "") {
-        if (this.readyState === 3) return;
-        this.readyState = 3;
-        setTimeout(() => this.onclose?.({ code, reason }), 1);
-      }
-    };
+    this.Impl = fakeSocketClass(this);
   }
   get last() { return this.sockets[this.sockets.length - 1]; }
   frame(extra = {}) {
