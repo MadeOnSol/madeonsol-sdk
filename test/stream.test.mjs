@@ -810,3 +810,61 @@ test("channels_revoked removes the channels from the subscription (no re-subscri
   await until(() => server.subscribes.length === 2, 3000, "resubscribe");
   assert.deepEqual(server.subscribes[1].channels, [CH]);
 });
+
+test("REGRESSION: resume_ts_hint is only used when EVERY incomplete channel is row_cap", async () => {
+  const server = new FakeServer();
+  const resume = { instance: "old", seq: 50, ts: T0 };
+  let n = 0;
+  server.onSubscribe = (ws, msg) => {
+    n++;
+    ackEcho(ws, msg);
+    ws.push({ type: "replay_start", mode: "durable" });
+    if (n === 1) {
+      ws.push(durable(CH, 1, T0 + 1)); // capped channel: rows up to the hint
+      ws.push({ type: "replay_end", count: 1, sent: 1, matched: 1, complete: false, reason: "row_cap",
+        last_seq: null, last_ts: null, live_from_seq: 9, mode: "durable", retryable: true, retry_after_ms: 30,
+        resume_ts_hint: T0 + 2, incomplete_channels: [CH, CH2],
+        channels: { [CH]: { mode: "durable", sent: 1, complete: false, reason: "row_cap", retryable: true, truncated_at_ts: T0 + 2 },
+                    [CH2]: { mode: "durable", sent: 0, complete: false, reason: "source_error", retryable: true } } });
+      return false;
+    }
+    // The retry must ask from the OLD cursor, so this channel's whole range is still available.
+    ws.push(durable(CH2, 1, T0 + 1));
+    ws.push(durable(CH, 2, T0 + 3));
+    ws.push({ type: "replay_end", count: 2, sent: 2, matched: 2, complete: true, reason: null, last_seq: null,
+      last_ts: T0 + 3, live_from_seq: 12, mode: "durable", retryable: false, channels: {} });
+    return false;
+  };
+  const { stream, events } = makeStream(server, { resume });
+  const ids = [];
+  stream.on("*", (d, evt) => { ids.push(evt.id); });
+  stream.subscribe([CH, CH2]);
+  await until(() => server.subscribes.length === 2, 3000, "auto re-resume");
+  assert.deepEqual(server.subscribes[1].resume, resume, "source_error is not a row_cap: resume from the pre-resume cursor");
+  await until(() => events.replay.length === 2, 3000, "second replay");
+  assert.ok(ids.includes(CH2 + "-1"), "the source_error channel range is delivered");
+  assert.equal(events.gap[0].exhausted, false);
+  assert.deepEqual(stream.getCursor(), { instance: "old", seq: 50, ts: T0 + 3 });
+});
+
+test("the automatic retry budget runs out visibly (gap.exhausted)", async () => {
+  const server = new FakeServer();
+  const resume = { instance: "old", seq: 50, ts: T0 };
+  server.onSubscribe = (ws, msg) => {
+    ackEcho(ws, msg);
+    ws.push({ type: "replay_start", mode: "durable" });
+    ws.push({ type: "replay_end", count: 0, sent: 0, matched: 0, complete: false, reason: "source_busy", last_seq: null, last_ts: null,
+      live_from_seq: 3, mode: "durable", retryable: true, retry_after_ms: 20,
+      channels: { [CH]: { mode: "durable", sent: 0, complete: false, reason: "source_busy", retryable: true } } });
+    return false;
+  };
+  const { stream, events } = makeStream(server, { resume, maxResumeRetries: 1 });
+  stream.subscribe([CH]);
+  await until(() => events.gap.length === 2, 3000, "second gap");
+  assert.equal(events.gap[0].exhausted, false);
+  assert.equal(events.gap[1].exhausted, true, "no more automatic retries on this connection");
+  await sleep(120);
+  assert.equal(server.subscribes.length, 2, "it stopped asking");
+  assert.deepEqual(stream.getCursor(), resume);
+  assert.equal(stream.isRecoveryIncomplete(), true);
+});

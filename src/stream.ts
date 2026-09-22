@@ -261,6 +261,13 @@ export interface StreamGap {
   skipped: { channels: string[]; from: StreamCursor | null; to: StreamCursor | null };
   /** Bounds the server reported for this resume (max age, row caps, slack), when it sends them. */
   limits: Record<string, unknown> | null;
+  /**
+   * true when this gap is retryable but the automatic re-resume budget
+   * (`maxResumeRetries`) is spent: the client stops asking again on this
+   * connection and the committed cursor stays put until the next reconnect
+   * resumes (or you call `acceptGap()`).
+   */
+  exhausted: boolean;
   replay: StreamReplayResult;
 }
 
@@ -750,6 +757,8 @@ export class MadeOnSolStream {
     if (r.timer) { clearTimeout(r.timer); r.timer = null; }
     this.recovery = null;
     const reasons: string[] = [];
+    /** Reasons of the channels the server reported incomplete (not the top-level one). */
+    const channelReasons: string[] = [];
     const gapChannels: Record<string, unknown> = {};
     const str = (v: unknown) => (typeof v === "string" && v ? v : null);
     const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -770,7 +779,9 @@ export class MadeOnSolStream {
           if (info.complete === false || gap || info.mode === "none" || late) {
             gapChannels[ch] = raw; // raw entry: mode, reason, gap, time_basis, retry_after_ms, …
             const gr = gap && typeof gap === "object" ? (gap as Record<string, unknown>).reason : gap;
-            reasons.push(str(info.reason) ?? str(gr) ?? (info.mode === "none" ? "not_reconstructable" : late ? "late_ingest_possible" : "incomplete"));
+            const chReason = str(info.reason) ?? str(gr) ?? (info.mode === "none" ? "not_reconstructable" : late ? "late_ingest_possible" : "incomplete");
+            reasons.push(chReason);
+            channelReasons.push(chReason);
           }
         }
       }
@@ -826,6 +837,14 @@ export class MadeOnSolStream {
     // Continuing past a FINAL gap is the SDK's own decision, never the user's
     // approval: it is reported on the gap event (advancedPastGap / skipped) and
     // `onUnrecoverableGap: "stop"` turns it off.
+    // resume_ts_hint is a row_cap device: it says "everything up to here was
+    // sent for the capped channel". If ANY incomplete channel failed for a
+    // different reason (source_error, source_busy, …), resuming from the hint
+    // would skip that channel's range and the next reply would claim complete.
+    // Only trust it when every incomplete channel is row_cap — never rely on
+    // the server gating it.
+    const capOnly = (channelReasons.length > 0 ? channelReasons : uniq).every((x) => x === "row_cap");
+    const exhausted = retryable && this.resumeRetries >= this.opts.maxResumeRetries;
     const strict = uniq.length > 0 && !retryable && this.opts.onUnrecoverableGap === "stop";
     const willAdvance = !retryable && !strict;
     this.emit("replay", result);
@@ -834,7 +853,7 @@ export class MadeOnSolStream {
       gap = {
         reason: uniq[0], reasons: uniq, permanent, retryable,
         retryAfterMs: num(end?.retry_after_ms), resumeTsHint: num(end?.resume_ts_hint),
-        channels: gapChannels, from: r.from, replay: result,
+        channels: gapChannels, from: r.from, replay: result, exhausted,
         limits: (end?.limits && typeof end.limits === "object" ? end.limits : r.start?.limits && typeof r.start.limits === "object" ? r.start.limits : null) as Record<string, unknown> | null,
         // What the client does about it — always reported BEFORE it happens.
         advancedPastGap: willAdvance,
@@ -854,7 +873,7 @@ export class MadeOnSolStream {
       if (pos) this.enqueue(pos, true);
     } else if (retryable) {
       this.unsafe = true;
-      if (serverSays) this.scheduleResumeRetry(num(end?.retry_after_ms), num(end?.resume_ts_hint));
+      if (serverSays) this.scheduleResumeRetry(num(end?.retry_after_ms), capOnly ? num(end?.resume_ts_hint) : null);
     } else {
       // strict: stop instead of skipping what cannot be recovered.
       this.unsafe = true;
