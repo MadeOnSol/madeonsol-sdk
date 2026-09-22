@@ -90,7 +90,9 @@ export type StreamLifecycleEvent =
   | "open"        // socket open (subscribe follows)
   | "close"       // socket closed: { code, reason } (reconnect may follow)
   | "reconnect"   // a reconnect attempt is scheduled: { attempt, delayMs, code }
-  | "subscribed"  // server confirmed a subscribe (the backoff resets here)
+  | "subscribed"  // server confirmed a subscribe (the backoff resets here); 2nd arg = the ack frame (carries sub_id for a named subscription)
+  | "updated"     // server confirmed an updateSubscription: the `updated` frame {sub_id?, filters}
+  | "unsubscribed" // server confirmed an unsubscribe: the `unsubscribed` frame {sub_id?, channels}
   | "heartbeat"   // server liveness ping
   | "warning"     // server warning frame (channels_rejected, channels_revoked, …) — see StreamWarning
   | "cursor"      // the resume cursor advanced — see StreamCursor (persist it for durable resume)
@@ -108,8 +110,16 @@ export type StreamLifecycleEvent =
  * channel is silent, so never ignore these.
  */
 export interface StreamWarning {
-  /** Machine-readable code, e.g. `"channels_rejected"` or `"channels_revoked"`. */
+  /**
+   * Machine-readable code: `channels_rejected`, `channels_revoked`,
+   * `replay_in_progress`, and for named subscriptions `invalid_sub_id`,
+   * `too_many_subscriptions`, `unknown_sub_id`, `invalid_filters`; the client
+   * itself emits `named_subscriptions_unsupported` once when the server
+   * ignores `sub_id` (older deployment).
+   */
   code?: string;
+  /** The named subscription the warning is about (absent for the default one). */
+  sub_id?: string;
   /** Channels the server refused, each with a human-readable reason. */
   rejected?: Array<{ channel: string; reason: string }>;
   /** Channels the server removed from this connection (channels_revoked). */
@@ -150,11 +160,38 @@ export interface StreamCursor {
   ts: number;
 }
 
+/**
+ * A named subscription (Phase 2): one socket can hold several, each with its
+ * own channels and filters. `subId` is client-chosen, 1-64 characters of
+ * `A-Z a-z 0-9 _ . -`. The plain `subscribe(channels, filters)` call is the
+ * connection's implicit `"default"` subscription; its frames carry no
+ * `sub_id`. An event that matches several subscriptions is delivered once
+ * per matching subscription, each frame stamped with its `sub_id`, and the
+ * client dedupes by (sub_id, id) — so the same event CAN reach two handlers
+ * legitimately. Tier caps (total per connection, the default one included):
+ * PRO 5, ULTRA 10, BUSINESS 20.
+ */
+export interface StreamSubscription {
+  subId: string;
+  channels: StreamChannel[];
+  filters: Record<string, unknown>;
+}
+
+/** Argument of `subscribe({ subId, channels, filters })`. */
+export interface StreamSubscribeOptions {
+  subId: string;
+  channels: StreamChannel[];
+  /** Filters scoped to THIS subscription only. Omitted = keep the ones it has. */
+  filters?: Record<string, unknown>;
+}
+
 export interface StreamEvent<T = unknown> {
   channel: StreamChannel;
   event: StreamEventName;
   data: T;
   ts: number;
+  /** The named subscription this frame was delivered under; absent for the default subscription. */
+  sub_id?: string;
   /** Stable event id — the same event carries the same id live and in replay. Dedupe on it. */
   id?: string;
   /**
@@ -202,8 +239,21 @@ export interface StreamReplayResult {
   resumeReason: string | null;
   /** Raw `replay_start` frame (null if none arrived). */
   start: Record<string, unknown> | null;
-  /** Raw `replay_end` frame (null on a client-side timeout). */
+  /**
+   * Raw `replay_end` frame (null on a client-side timeout). With several
+   * named subscriptions this is the LAST one received; `ends` has them all.
+   */
   end: Record<string, unknown> | null;
+  /**
+   * The subscriptions this recovery covered (`"default"` for the plain one).
+   * A client holding N named subscriptions resumes each of them: every
+   * subscribe of the reconnect carries the same cursor, the server serves the
+   * replays one after another and the cursor commits once ALL have ended,
+   * at the smallest `last_seq` / `last_ts` across them.
+   */
+  subscriptions: string[];
+  /** Raw `replay_end` frame per subscription. */
+  ends: Record<string, Record<string, unknown>>;
 }
 
 /**
@@ -234,7 +284,11 @@ export interface StreamGap {
    * range is requested again on the next reconnect.
    */
   permanent: boolean;
-  /** Per-channel entries the server reported as incomplete / not reconstructable. */
+  /**
+   * Per-channel entries the server reported as incomplete / not
+   * reconstructable, keyed by channel for the default subscription and by
+   * `"<sub_id>/<channel>"` for a named one.
+   */
   channels: Record<string, unknown>;
   /** The cursor the resume started from (the committed cursor stays there). */
   from: StreamCursor | null;
@@ -394,9 +448,17 @@ interface Recovery {
   maxSeq: number | null;
   maxTs: number | null;
   timer: ReturnType<typeof setTimeout> | null;
+  /** Subscriptions (sub_ids, "default" included) whose replay_end is still awaited. */
+  pending: Set<string>;
+  /** replay_start / replay_end per subscription. */
+  starts: Map<string, Frame>;
+  ends: Map<string, Frame>;
 }
 
 const HELD_LIVE_CAP = 10_000;
+const DEFAULT_SUB_ID = "default";
+const SUB_ID_RE = /^[A-Za-z0-9_.-]{1,64}$/;
+const subIdOf = (f: Frame): string => (typeof f.sub_id === "string" && f.sub_id ? f.sub_id : DEFAULT_SUB_ID);
 
 function isThenable(v: unknown): v is PromiseLike<unknown> {
   return !!v && (typeof v === "object" || typeof v === "function") && typeof (v as { then?: unknown }).then === "function";
@@ -437,6 +499,12 @@ export class MadeOnSolStream {
   private ws: WebSocketLike | null = null;
   private listeners = new Map<string, Set<Listener>>();
   private desired = { channels: new Set<StreamChannel>(), filters: {} as Record<string, unknown> };
+  /** Named subscriptions (Phase 2), in creation order; the default one is `desired`. */
+  private named = new Map<string, { channels: Set<StreamChannel>; filters: Record<string, unknown> }>();
+  /** sub_ids of the subscribes sent on this connection whose `subscribed` ack is still due (acks arrive in order). */
+  private ackExpect: string[] = [];
+  private namedUnsupportedWarned = false;
+  private listWaiters: Array<{ resolve: (l: StreamSubscription[]) => void; timer: ReturnType<typeof setTimeout> }> = [];
   private closedByUser = false;
   private stopped = false;
   private attempt = 0;
@@ -560,22 +628,104 @@ export class MadeOnSolStream {
     }
   }
 
-  /** Subscribe to one or more channels (connects on first call). Optional server-side filters. */
-  subscribe(channels: StreamChannel[], filters?: Record<string, unknown>): this {
-    for (const c of channels) this.desired.channels.add(c);
-    if (filters) this.desired.filters = { ...this.desired.filters, ...filters };
-    if (this.ws && this.ws.readyState === OPEN) this.sendSubscribe();
+  /**
+   * Subscribe to one or more channels (connects on first call). Optional
+   * server-side filters. `subscribe(channels, filters)` is the connection's
+   * default subscription; `subscribe({ subId, channels, filters })` opens (or
+   * extends) a NAMED subscription with its own channels and filters, whose
+   * frames carry `evt.sub_id` (see StreamSubscription).
+   */
+  subscribe(channels: StreamChannel[], filters?: Record<string, unknown>): this;
+  subscribe(opts: StreamSubscribeOptions): this;
+  subscribe(arg: StreamChannel[] | StreamSubscribeOptions, filters?: Record<string, unknown>): this {
+    if (Array.isArray(arg)) {
+      for (const c of arg) this.desired.channels.add(c);
+      if (filters) this.desired.filters = { ...this.desired.filters, ...filters };
+      if (this.ws && this.ws.readyState === OPEN) this.sendSubscribe({ only: [DEFAULT_SUB_ID] });
+      else void this.connect();
+      return this;
+    }
+    const subId = arg.subId;
+    if (typeof subId !== "string" || !SUB_ID_RE.test(subId)) throw new Error("subId must be 1-64 characters of A-Z a-z 0-9 _ . -");
+    if (subId === DEFAULT_SUB_ID) return this.subscribe(arg.channels, arg.filters);
+    const entry = this.named.get(subId) ?? { channels: new Set<StreamChannel>(), filters: {} };
+    for (const c of arg.channels) entry.channels.add(c);
+    // A named subscription's filters are REPLACED when given (the server does the same).
+    if (arg.filters) entry.filters = { ...arg.filters };
+    this.named.set(subId, entry);
+    if (this.ws && this.ws.readyState === OPEN) this.sendSubscribe({ only: [subId] });
     else void this.connect();
     return this;
   }
 
-  /** Stop receiving the given channels. */
-  unsubscribe(channels: StreamChannel[]): this {
-    for (const c of channels) this.desired.channels.delete(c);
+  /**
+   * Replace the filters of a subscription (`"default"` for the plain one).
+   * The server acks with an `updated` frame; a refused update (for example a
+   * `token:prices` subscription without valid `mints`) arrives as a `warning`
+   * with code `invalid_filters` and the previous filters stay.
+   */
+  updateSubscription(subId: string, filters: Record<string, unknown>): this {
+    if (subId === DEFAULT_SUB_ID) this.desired.filters = { ...filters };
+    else {
+      const entry = this.named.get(subId);
+      if (!entry) throw new Error(`unknown subscription ${subId}`);
+      entry.filters = { ...filters };
+    }
     if (this.ws && this.ws.readyState === OPEN) {
-      this.ws.send(JSON.stringify({ type: "unsubscribe", channels }));
+      this.ws.send(JSON.stringify({ type: "update", ...(subId === DEFAULT_SUB_ID ? {} : { sub_id: subId }), filters }));
     }
     return this;
+  }
+
+  /**
+   * `unsubscribe(channels)` stops those channels on the default subscription;
+   * `unsubscribe(subId)` removes a whole named subscription.
+   */
+  unsubscribe(channels: StreamChannel[]): this;
+  unsubscribe(subId: string): this;
+  unsubscribe(arg: StreamChannel[] | string): this {
+    if (typeof arg === "string") {
+      if (arg === DEFAULT_SUB_ID) return this.unsubscribe(Array.from(this.desired.channels));
+      this.named.delete(arg);
+      this.forgetPending(arg);
+      if (this.ws && this.ws.readyState === OPEN) this.ws.send(JSON.stringify({ type: "unsubscribe", sub_id: arg }));
+      return this;
+    }
+    for (const c of arg) this.desired.channels.delete(c);
+    if (this.ws && this.ws.readyState === OPEN) {
+      this.ws.send(JSON.stringify({ type: "unsubscribe", channels: arg }));
+    }
+    return this;
+  }
+
+  /** Every subscription this client asks for (local view, no round trip). */
+  getSubscriptions(): StreamSubscription[] {
+    const out: StreamSubscription[] = [];
+    if (this.desired.channels.size > 0) out.push({ subId: DEFAULT_SUB_ID, channels: Array.from(this.desired.channels), filters: { ...this.desired.filters } });
+    for (const [subId, e] of this.named) out.push({ subId, channels: Array.from(e.channels), filters: { ...e.filters } });
+    return out;
+  }
+
+  /**
+   * Ask the server what this connection holds (`list` → `subscriptions`).
+   * Resolves with the local view when not connected or when the server does
+   * not answer within `timeoutMs`.
+   */
+  listSubscriptions(timeoutMs = 5_000): Promise<StreamSubscription[]> {
+    if (!this.ws || this.ws.readyState !== OPEN) return Promise.resolve(this.getSubscriptions());
+    return new Promise((resolve) => {
+      const w = { resolve, timer: setTimeout(() => { this.listWaiters = this.listWaiters.filter((x) => x !== w); resolve(this.getSubscriptions()); }, timeoutMs) };
+      this.listWaiters.push(w);
+      try { this.ws!.send(JSON.stringify({ type: "list" })); } catch { /* closing: the timer answers */ }
+    });
+  }
+
+  /** A subscription removed while its replay was still awaited: stop waiting for it. */
+  private forgetPending(subId: string): void {
+    const r = this.recovery;
+    if (!r || !r.pending.has(subId)) return;
+    r.pending.delete(subId);
+    if (r.pending.size === 0 && r.protocol !== "detect") this.finishRecovery(r.ends.size ? [...r.ends.values()].pop()! : null);
   }
 
   /** Open the connection (also called implicitly by subscribe). Restarts a stream that went `"fatal"`. */
@@ -603,7 +753,8 @@ export class MadeOnSolStream {
         // The backoff attempt is NOT reset here — only a `subscribed` ack proves
         // the connection is usable (an auth/limit close follows a successful open).
         this.resetHeartbeat();
-        if (this.desired.channels.size > 0) this.sendSubscribe();
+        this.ackExpect = [];
+        if (this.desired.channels.size > 0 || this.named.size > 0) this.sendSubscribe();
         this.emit("open", undefined);
       };
       ws.onmessage = (ev) => { if (this.ws === ws) this.handleMessage(ev.data); };
@@ -693,33 +844,63 @@ export class MadeOnSolStream {
     this.emit("fatal", { code, reason } satisfies StreamFatal);
   }
 
-  private sendSubscribe(resumeOverride?: StreamCursor): void {
-    const channels = Array.from(this.desired.channels);
-    if (channels.length === 0 || !this.ws) return;
-    const msg: Record<string, unknown> = { type: "subscribe", channels };
-    if (Object.keys(this.desired.filters).length > 0) msg.filters = this.desired.filters;
-    // Only the FIRST subscribe of a connection resumes (or an explicit retry
-    // after a retryable gap); a later subscribe adds channels live, and the
-    // server replays only the channels named in a subscribe.
+  /** The subscribe frames for the given subscriptions (default first, then named in creation order). */
+  private subscribeFrames(only?: string[]): Array<{ subId: string; msg: Record<string, unknown> }> {
+    const out: Array<{ subId: string; msg: Record<string, unknown> }> = [];
+    const want = (id: string) => !only || only.includes(id);
+    if (want(DEFAULT_SUB_ID) && this.desired.channels.size > 0) {
+      const msg: Record<string, unknown> = { type: "subscribe", channels: Array.from(this.desired.channels) };
+      if (Object.keys(this.desired.filters).length > 0) msg.filters = this.desired.filters;
+      out.push({ subId: DEFAULT_SUB_ID, msg });
+    }
+    for (const [subId, e] of this.named) {
+      if (!want(subId) || e.channels.size === 0) continue;
+      out.push({ subId, msg: { type: "subscribe", sub_id: subId, channels: Array.from(e.channels), filters: e.filters } });
+    }
+    return out;
+  }
+
+  /**
+   * Send the subscribe(s). On a connection's FIRST subscribe (or an explicit
+   * retry after a retryable gap) every subscription is sent with the SAME
+   * resume cursor: the server serves one replay per subscription, one after
+   * another, and holds live frames until the last replay_end. A later
+   * subscribe adds channels live (no resume).
+   */
+  private sendSubscribe({ resumeOverride, only }: { resumeOverride?: StreamCursor; only?: string[] } = {}): void {
+    if (!this.ws) return;
+    const frames = this.subscribeFrames(only);
+    if (frames.length === 0) return;
     if ((!this.firstSubscribeSent || resumeOverride) && this.cursor && !this.recovery) {
       const from = resumeOverride ?? { ...this.cursor };
-      msg.resume = from;
+      const pending = new Set<string>();
+      const channels = new Set<string>();
+      for (const f of frames) { f.msg.resume = from; pending.add(f.subId); for (const c of f.msg.channels as string[]) channels.add(c); }
       this.recovery = {
-        protocol: "detect", from, channels, request: { resume: from }, acked: false, suppressAck: false,
+        protocol: "detect", from, channels: Array.from(channels), request: { resume: from }, acked: false, suppressAck: false,
         instanceChanged: false, start: null, received: 0, delivered: 0, duplicates: 0, held: [], timer: null,
-        maxSeq: null, maxTs: null,
+        maxSeq: null, maxTs: null, pending, starts: new Map(), ends: new Map(),
       };
     }
     this.firstSubscribeSent = true;
-    this.ws.send(JSON.stringify(msg));
+    for (const f of frames) {
+      this.ackExpect.push(f.subId);
+      this.ws.send(JSON.stringify(f.msg));
+    }
   }
 
-  /** The server did not answer `resume` (older deployment): retry with the legacy fields. */
+  /**
+   * The server did not answer `resume` (older deployment): retry with the
+   * legacy fields. Such a server has no named subscriptions either, so the
+   * one legacy replay covers the union of channels and resolves every pending
+   * subscription at once.
+   */
   private fallbackToLegacy(): void {
     const r = this.recovery;
     if (!r || r.protocol !== "detect" || !r.from || !this.ws) return;
     if (r.timer) { clearTimeout(r.timer); r.timer = null; }
     r.protocol = "legacy";
+    r.pending = new Set([DEFAULT_SUB_ID]);
     r.instanceChanged = !this.serverInstance || this.serverInstance !== r.from.instance;
     // Same process → its ring still indexes our seq. Restarted → seq restarted, use time.
     const legacy = r.instanceChanged ? { replay_since_ts: r.from.ts } : { replay_since_seq: r.from.seq };
@@ -735,6 +916,12 @@ export class MadeOnSolStream {
     if (this.recovery?.timer) clearTimeout(this.recovery.timer);
     this.recovery = null;
     if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
+    // A `list` still awaiting its answer resolves with the local view; the
+    // ack order of the dead connection means nothing on the next one.
+    this.ackExpect = [];
+    const waiters = this.listWaiters;
+    this.listWaiters = [];
+    for (const w of waiters) { clearTimeout(w.timer); w.resolve(this.getSubscriptions()); }
   }
 
   /**
@@ -742,7 +929,7 @@ export class MadeOnSolStream {
    * retry_after_ms (row_cap resumes from resume_ts_hint). Bounded — the next
    * reconnect resumes anyway.
    */
-  private scheduleResumeRetry(retryAfterMs: number | null, hintTs: number | null): void {
+  private scheduleResumeRetry(retryAfterMs: number | null, hintTs: number | null, only?: string[]): void {
     if (this.retryTimer || !this.cursor) return;
     if (this.resumeRetries >= this.opts.maxResumeRetries) return;
     this.resumeRetries++;
@@ -750,15 +937,63 @@ export class MadeOnSolStream {
     const from: StreamCursor = hintTs !== null && hintTs > this.cursor.ts ? { ...this.cursor, ts: hintTs } : { ...this.cursor };
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
-      if (this.ws && this.ws.readyState === OPEN && !this.recovery) this.sendSubscribe(from);
+      // Only the subscriptions whose replay was incomplete are asked again.
+      if (this.ws && this.ws.readyState === OPEN && !this.recovery) this.sendSubscribe({ resumeOverride: from, only });
     }, delay);
   }
 
-  private finishRecovery(end: Frame | null): void {
+  /**
+   * One `replay_end` per subscription → one aggregate the single-replay logic
+   * can run on unchanged: complete only when every subscription is; the
+   * commit position is the SMALLEST last_seq / last_ts across them (a later
+   * subscription's replay covered more, but the earlier one's live frames
+   * from that point on are still only in the live flush); channel entries
+   * keyed `"<sub_id>/<channel>"` for named subscriptions; `retryable` when
+   * any subscription says so.
+   */
+  private aggregateEnds(r: Recovery, lastEnd: Frame | null): Frame | null {
+    const ends = [...r.ends.entries()];
+    if (ends.length === 0) return lastEnd;
+    if (ends.length === 1 && ends[0][0] === DEFAULT_SUB_ID) return ends[0][1];
+    const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+    const agg: Frame = { ...(lastEnd ?? ends[ends.length - 1][1]) };
+    const channels: Record<string, unknown> = {};
+    let complete = true, retryableKnown = true, retryable = false, truncated = false;
+    let lastSeq: number | null = null, lastTs: number | null = null, liveFrom: number | null = null, retryAfter: number | null = null, hint: number | null = null;
+    let count = 0, sent = 0, matched = 0, reason: string | null = null, limits: unknown = null;
+    const min = (a: number | null, b: number | null) => (a === null ? b : b === null ? a : Math.min(a, b));
+    for (const [subId, e] of ends) {
+      if (e.complete === false) { complete = false; if (!reason && typeof e.reason === "string") reason = e.reason; }
+      if (typeof e.retryable !== "boolean") retryableKnown = false; else if (e.retryable) retryable = true;
+      if (e.replay_truncated === true) truncated = true;
+      const chs = e.channels;
+      if (chs && typeof chs === "object") for (const [ch, raw] of Object.entries(chs as Record<string, unknown>)) channels[subId === DEFAULT_SUB_ID ? ch : `${subId}/${ch}`] = raw;
+      lastSeq = min(lastSeq, num(e.last_seq)); lastTs = min(lastTs, num(e.last_ts)); liveFrom = min(liveFrom, num(e.live_from_seq));
+      const ra = num(e.retry_after_ms); if (ra !== null) retryAfter = retryAfter === null ? ra : Math.max(retryAfter, ra);
+      hint = min(hint, num(e.resume_ts_hint));
+      count += num(e.count) ?? 0; sent += num(e.sent) ?? 0; matched += num(e.matched) ?? 0;
+      if (!limits && e.limits && typeof e.limits === "object") limits = e.limits;
+    }
+    agg.complete = complete; agg.reason = complete ? null : reason ?? "incomplete"; agg.channels = channels;
+    if (retryableKnown) agg.retryable = retryable; else delete agg.retryable;
+    if (truncated) agg.replay_truncated = true;
+    agg.last_seq = lastSeq; agg.last_ts = lastTs; agg.live_from_seq = liveFrom;
+    if (retryAfter !== null) agg.retry_after_ms = retryAfter; else delete agg.retry_after_ms;
+    if (hint !== null) agg.resume_ts_hint = hint; else delete agg.resume_ts_hint;
+    agg.count = count; agg.sent = sent; agg.matched = matched;
+    if (limits) agg.limits = limits;
+    return agg;
+  }
+
+  private finishRecovery(lastEnd: Frame | null): void {
     const r = this.recovery;
     if (!r) return;
     if (r.timer) { clearTimeout(r.timer); r.timer = null; }
     this.recovery = null;
+    const end = this.aggregateEnds(r, lastEnd);
+    // Subscriptions whose own replay_end was incomplete and retryable (or, on a
+    // server that does not say, incomplete): the automatic retry asks only for them.
+    const retrySubs = [...r.ends.entries()].filter(([, e]) => e.complete === false && e.retryable !== false).map(([id]) => id);
     const reasons: string[] = [];
     /** Reasons of the channels the server reported incomplete, with their retryability. */
     const channelReasons: string[] = [];
@@ -768,7 +1003,7 @@ export class MadeOnSolStream {
     const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
     // A v1 server answers with complete/sent/matched; an older one with count only.
     const v1 = !!end && ("complete" in end || "sent" in end || "matched" in end);
-    if (r.start?.replay_truncated === true || end?.replay_truncated === true) reasons.push("ring_truncated");
+    if ([...r.starts.values()].some((s) => s.replay_truncated === true) || r.start?.replay_truncated === true || end?.replay_truncated === true) reasons.push("ring_truncated");
     if (!end) reasons.push("replay_timeout");
     else if (v1) {
       if (end.complete === false) reasons.push(str(end.reason) ?? "incomplete");
@@ -809,6 +1044,8 @@ export class MadeOnSolStream {
       resumeReason: typeof end?.resume_reason === "string" ? end.resume_reason : null,
       start: r.start,
       end,
+      subscriptions: r.ends.size ? [...r.ends.keys()] : r.pending.size ? [...r.pending] : [DEFAULT_SUB_ID],
+      ends: Object.fromEntries(r.ends),
     };
     // Final vs retryable. The server says which (`retryable`): true only when an
     // incomplete channel's reason is transient (backpressure, closed,
@@ -882,7 +1119,7 @@ export class MadeOnSolStream {
       if (pos) this.enqueue(pos, true);
     } else if (retryable) {
       this.unsafe = true;
-      if (serverSays) this.scheduleResumeRetry(num(end?.retry_after_ms), capOnly ? num(end?.resume_ts_hint) : null);
+      if (serverSays) this.scheduleResumeRetry(num(end?.retry_after_ms), capOnly ? num(end?.resume_ts_hint) : null, retrySubs.length ? retrySubs : undefined);
     } else {
       // strict: stop instead of skipping what cannot be recovered.
       this.unsafe = true;
@@ -909,7 +1146,7 @@ export class MadeOnSolStream {
       case "connected":
         if (typeof msg.instance === "string") this.serverInstance = msg.instance;
         // Nothing to subscribe to → this frame is as far as a healthy connection gets.
-        if (this.desired.channels.size === 0) { this.attempt = 0; this.authFailures = 0; }
+        if (this.desired.channels.size === 0 && this.named.size === 0) { this.attempt = 0; this.authFailures = 0; }
         return;
       case "subscribed": {
         if (typeof msg.instance === "string") this.serverInstance = msg.instance;
@@ -917,19 +1154,29 @@ export class MadeOnSolStream {
         this.authFailures = 0;
         const r = this.recovery;
         if (r && r.suppressAck) { r.suppressAck = false; return; } // ack of our own fallback subscribe
-        this.emit("subscribed", msg.channels);
+        // Acks arrive in the order the subscribes were sent: a named subscribe
+        // answered WITHOUT sub_id means the server ignores sub_id (older
+        // deployment) — every subscription then collapsed into one on the
+        // server. Said once, never silently.
+        const expected = this.ackExpect.shift() ?? DEFAULT_SUB_ID;
+        if (expected !== DEFAULT_SUB_ID && typeof msg.sub_id !== "string" && !this.namedUnsupportedWarned) {
+          this.namedUnsupportedWarned = true;
+          this.emit("warning", { code: "named_subscriptions_unsupported", sub_id: expected, message: "The server ignored sub_id: it predates named subscriptions, so every subscription on this connection shares one channel set and one filter object." } satisfies StreamWarning);
+        }
+        this.emit("subscribed", msg.channels, msg as unknown as StreamEvent);
         if (r && r.protocol === "detect" && !r.acked) {
           r.acked = true;
-          const echo = msg.resume;
-          if (echo && typeof echo === "object" && (echo as Record<string, unknown>).accepted === false) {
-            // Refused (e.g. replay_in_progress): no replay follows, and this is
-            // a v1 server — no waiting, no legacy fallback. The server's own
-            // warning frame explains why. Nothing was recovered, so the
-            // committed cursor must not move until a later recovery completes.
-            this.dropRecovery();
-            this.unsafe = true;
-          } else if ("resume" in msg) r.protocol = "resume"; // server echoed resume: it understood
+          if ("resume" in msg) r.protocol = "resume"; // server echoed resume: it understood
           else r.timer = setTimeout(() => this.fallbackToLegacy(), this.opts.resumeDetectMs);
+        }
+        const echo = msg.resume;
+        if (r && echo && typeof echo === "object" && (echo as Record<string, unknown>).accepted === false) {
+          // Refused for THIS subscription (replay_in_progress: it already has a
+          // replay running or queued): no replay_end will come for it. When
+          // nothing at all was accepted, nothing was recovered, so the
+          // committed cursor must not move until a later recovery completes.
+          r.pending.delete(subIdOf(msg));
+          if (r.pending.size === 0 && r.ends.size === 0) { this.dropRecovery(); this.unsafe = true; }
         }
         return;
       }
@@ -940,20 +1187,49 @@ export class MadeOnSolStream {
           r = this.recovery = {
             protocol: "resume", from: null, channels: [], request: {}, acked: true, suppressAck: false,
             instanceChanged: false, start: null, received: 0, delivered: 0, duplicates: 0, held: [], timer: null,
-            maxSeq: null, maxTs: null,
+            maxSeq: null, maxTs: null, pending: new Set([subIdOf(msg)]), starts: new Map(), ends: new Map(),
           };
         }
         if (r.protocol === "detect") {
           r.protocol = "resume";
           if (r.timer) { clearTimeout(r.timer); r.timer = null; }
         }
-        r.start = msg;
+        r.starts.set(subIdOf(msg), msg);
+        if (!r.start) r.start = msg;
         return;
       }
-      case "replay_end":
-        this.finishRecovery(msg);
+      case "replay_end": {
+        const r = this.recovery;
+        if (!r) return;
+        const sid = subIdOf(msg);
+        r.ends.set(sid, msg);
+        r.pending.delete(sid);
+        // Every subscription's replay has ended (a legacy server answers once,
+        // for the whole connection) → aggregate and commit.
+        if (r.pending.size === 0 || r.protocol === "legacy") this.finishRecovery(msg);
         return;
-      case "warning":
+      }
+      case "updated":
+        this.emit("updated", msg);
+        return;
+      case "unsubscribed":
+        this.emit("unsubscribed", msg);
+        return;
+      case "subscriptions": {
+        const list: StreamSubscription[] = Array.isArray(msg.list)
+          ? (msg.list as Array<Record<string, unknown>>).map((s) => ({
+            subId: typeof s.sub_id === "string" ? s.sub_id : DEFAULT_SUB_ID,
+            channels: (Array.isArray(s.channels) ? s.channels : []) as StreamChannel[],
+            filters: (s.filters && typeof s.filters === "object" ? s.filters : {}) as Record<string, unknown>,
+          }))
+          : [];
+        const waiters = this.listWaiters;
+        this.listWaiters = [];
+        for (const w of waiters) { clearTimeout(w.timer); w.resolve(list); }
+        return;
+      }
+      case "warning": {
+        const sid = typeof msg.sub_id === "string" ? msg.sub_id : null;
         if (msg.code === "channels_revoked") {
           // The server dropped these (e.g. plan downgrade): stop re-subscribing them.
           const names = new Set<string>();
@@ -964,11 +1240,18 @@ export class MadeOnSolStream {
               else if (x && typeof x === "object" && typeof (x as { channel?: unknown }).channel === "string") names.add((x as { channel: string }).channel);
             }
           }
-          for (const c of names) this.desired.channels.delete(c as StreamChannel);
+          const target = sid && sid !== DEFAULT_SUB_ID ? this.named.get(sid)?.channels : this.desired.channels;
+          if (target) for (const c of names) target.delete(c as StreamChannel);
+          if (sid && sid !== DEFAULT_SUB_ID && this.named.get(sid)?.channels.size === 0) this.named.delete(sid);
+        } else if ((msg.code === "too_many_subscriptions" || msg.code === "invalid_sub_id") && sid && sid !== DEFAULT_SUB_ID) {
+          // The server will refuse it on every reconnect too: forget it, and do not wait for its replay.
+          this.named.delete(sid);
+          this.forgetPending(sid);
         }
         // Never swallow a server warning: a rejected/revoked channel is silent.
         this.emit("warning", msg as StreamWarning);
         return;
+      }
       default:
         break;
     }
@@ -1000,7 +1283,9 @@ export class MadeOnSolStream {
     }
     const id = typeof msg.id === "string" || typeof msg.id === "number" ? String(msg.id) : null;
     if (id !== null && this.opts.dedupeSize > 0) {
-      const key = `${String(msg.channel)}\u0000${id}`;
+      // Dedupe is per (sub_id, channel, id): the same event delivered under two
+      // named subscriptions is two legitimate deliveries.
+      const key = `${subIdOf(msg)}\u0000${String(msg.channel)}\u0000${id}`;
       if (this.seen.has(key)) {
         this.seen.delete(key);
         this.seen.set(key, true);

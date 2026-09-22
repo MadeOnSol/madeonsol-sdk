@@ -19,6 +19,8 @@ export type {
   StreamReplayResult,
   StreamGap,
   StreamFatal,
+  StreamSubscription,
+  StreamSubscribeOptions,
 } from "./stream.js";
 
 const BASE_URL = "https://madeonsol.com/api/v1";

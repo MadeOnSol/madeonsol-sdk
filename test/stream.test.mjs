@@ -47,6 +47,9 @@ function fakeSocketClass(server) {
     send(raw) {
       const msg = JSON.parse(raw);
       if (msg.type === "subscribe") server.handleSubscribe(this, msg);
+      else if (msg.type === "update") server.handleUpdate(this, msg);
+      else if (msg.type === "unsubscribe") server.handleUnsubscribe(this, msg);
+      else if (msg.type === "list") server.handleList(this);
     }
     close(code = 1000, reason = "") { this.serverClose(code, reason); }
     terminate() { this.serverClose(1006, ""); }
@@ -85,9 +88,18 @@ class FakeServer {
     return f;
   }
   live(ws, extra) { const f = this.frame(extra); ws.push(f); return f; }
+  /** Phase 2: deliver one live frame under each named subscription in `subIds` (a copy per sub, stamped sub_id). */
+  liveTo(ws, subIds, extra) { const f = this.frame(extra); for (const sub_id of subIds) ws.push({ ...f, sub_id }); return f; }
+  handleUpdate(ws, msg) { this.updates = this.updates || []; this.updates.push(msg); ws.push({ type: "updated", ...(msg.sub_id ? { sub_id: msg.sub_id } : {}), filters: msg.filters, ts: Date.now() }); }
+  handleUnsubscribe(ws, msg) { this.unsubscribes = this.unsubscribes || []; this.unsubscribes.push(msg); ws.push({ type: "unsubscribed", ...(msg.sub_id ? { sub_id: msg.sub_id } : {}), channels: msg.sub_id ? [] : [], ts: Date.now() }); }
+  handleList(ws) { ws.push({ type: "subscriptions", list: this.listReply ?? [], count: (this.listReply ?? []).length, max: 5, ts: Date.now() }); }
   handleSubscribe(ws, msg) {
     this.subscribes.push(msg);
-    const ack = { type: "subscribed", channels: msg.channels, seq: this.seq, instance: this.instance, ts: Date.now() };
+    // Phase 2: a named subscribe is acked (and its replay bracketed) with sub_id;
+    // `namedUnsupported` mimics a pre-Phase-2 server that ignores sub_id.
+    const named = typeof msg.sub_id === "string" && !this.namedUnsupported;
+    const tag = named ? { sub_id: msg.sub_id } : {};
+    const ack = { type: "subscribed", ...tag, channels: msg.channels, seq: this.seq, instance: this.instance, ts: Date.now() };
     if (this.onSubscribe && this.onSubscribe(ws, msg) === false) return;
     if (this.mode === "v1") {
       // PR #81: the ack echoes resume {…, accepted}; replay_start … replay_end
@@ -99,13 +111,13 @@ class FakeServer {
         const same = r.instance === this.instance;
         const mode = same ? "ring" : "durable";
         const out = this.ring.filter((f) => (same ? f.seq > r.seq : f.ts > r.ts));
-        ws.push({ type: "replay_start", mode, count: same ? out.length : null, ...(same ? {} : { resume: true, reason: "instance_changed", since_ts: r.ts }), ts: Date.now() });
+        ws.push({ type: "replay_start", ...tag, mode, count: same ? out.length : null, ...(same ? {} : { resume: true, reason: "instance_changed", since_ts: r.ts }), ts: Date.now() });
         for (const f of out) {
-          ws.push(same ? { ...f, replayed: true, mode: "ring" } : { ...f, seq: null, replayed: true, mode: "durable", ...(this.durableMissing ? { partial: true, missing: this.durableMissing } : {}) });
+          ws.push(same ? { ...f, ...tag, replayed: true, mode: "ring" } : { ...f, ...tag, seq: null, replayed: true, mode: "durable", ...(this.durableMissing ? { partial: true, missing: this.durableMissing } : {}) });
         }
         const last = out[out.length - 1];
-        ws.push(this.v1Result ?? {
-          type: "replay_end", count: out.length, sent: out.length, matched: out.length, complete: true, reason: null,
+        ws.push(this.v1Result ? { ...tag, ...this.v1Result } : {
+          type: "replay_end", ...tag, count: out.length, sent: out.length, matched: out.length, complete: true, reason: null,
           last_seq: same && last ? last.seq : null, last_ts: last ? last.ts : null, live_from_seq: this.seq + 1,
           mode, resume_reason: same ? null : "instance_changed", retryable: false,
           channels: { [CH]: { mode, sent: out.length, complete: true, ...(this.durableMissing ? { partial: true, missing: this.durableMissing } : {}) } },
@@ -921,4 +933,220 @@ test("the retry budget is per connection: a reconnect makes retries available ag
   await until(() => server.subscribes.length === before + 2, 3000, "reconnect resume + retry");
   assert.equal(events.gap[2].exhausted, false, "fresh budget on the new connection");
   assert.deepEqual(stream.getCursor(), resume, "still not committed");
+});
+
+// ── Named subscriptions (Phase 2) ─────────────────────────────────────────────
+
+test("named subscriptions: two subs with different filters are sent separately and frames carry sub_id", async () => {
+  const server = new FakeServer();
+  const { stream } = makeStream(server);
+  const seen = [];
+  stream.on(EV, (d, evt) => { seen.push([evt.sub_id ?? null, d.n]); });
+  stream.subscribe({ subId: "buys", channels: [CH], filters: { action: "buy" } });
+  stream.subscribe({ subId: "sells", channels: [CH, CH2], filters: { action: "sell" } });
+  await until(() => server.subscribes.length === 2, 2000, "two subscribes");
+  assert.deepEqual(server.subscribes[0], { type: "subscribe", sub_id: "buys", channels: [CH], filters: { action: "buy" } });
+  assert.deepEqual(server.subscribes[1], { type: "subscribe", sub_id: "sells", channels: [CH, CH2], filters: { action: "sell" } });
+  server.liveTo(server.last, ["buys"], { seq: 1 });
+  server.liveTo(server.last, ["sells"], { seq: 2 });
+  await until(() => seen.length === 2);
+  assert.deepEqual(seen, [["buys", 1], ["sells", 2]]);
+  assert.deepEqual(stream.getSubscriptions(), [
+    { subId: "buys", channels: [CH], filters: { action: "buy" } },
+    { subId: "sells", channels: [CH, CH2], filters: { action: "sell" } },
+  ]);
+  assert.equal(stream.getCursor().seq, 2, "named frames advance the connection cursor like any other");
+});
+
+test("named subscriptions: the default subscription is untouched by a named one (no sub_id on its wire)", async () => {
+  const server = new FakeServer();
+  const { stream, got } = makeStream(server);
+  stream.subscribe([CH], { min_sol: 1 });
+  stream.subscribe({ subId: "x", channels: [CH2] });
+  await until(() => server.subscribes.length === 2);
+  assert.deepEqual(server.subscribes[0], { type: "subscribe", channels: [CH], filters: { min_sol: 1 } });
+  assert.equal("sub_id" in server.subscribes[0], false);
+  server.live(server.last, { seq: 1 });
+  await until(() => got.length === 1);
+  assert.throws(() => stream.subscribe({ subId: "bad id", channels: [CH] }), /subId must be/);
+});
+
+test("updateSubscription replaces one subscription's filters; the server's `updated` ack is surfaced", async () => {
+  const server = new FakeServer();
+  const { stream } = makeStream(server);
+  const updated = [];
+  stream.on("updated", (m) => updated.push(m));
+  stream.subscribe({ subId: "buys", channels: [CH], filters: { action: "buy" } });
+  await until(() => server.subscribes.length === 1);
+  stream.updateSubscription("buys", { action: "sell", min_sol: 2 });
+  await until(() => updated.length === 1, 2000, "updated ack");
+  assert.deepEqual(server.updates[0], { type: "update", sub_id: "buys", filters: { action: "sell", min_sol: 2 } });
+  assert.deepEqual(updated[0].filters, { action: "sell", min_sol: 2 });
+  assert.deepEqual(stream.getSubscriptions()[0].filters, { action: "sell", min_sol: 2 });
+  // The default subscription is addressed as "default" and sent without sub_id.
+  stream.subscribe([CH2]);
+  await until(() => server.subscribes.length === 2);
+  stream.updateSubscription("default", { min_sol: 3 });
+  await until(() => updated.length === 2);
+  assert.deepEqual(server.updates[1], { type: "update", filters: { min_sol: 3 } });
+  assert.throws(() => stream.updateSubscription("nope", {}), /unknown subscription/);
+});
+
+test("unsubscribe(subId) removes the named subscription and it is not re-sent on reconnect", async () => {
+  const server = new FakeServer();
+  const { stream } = makeStream(server);
+  const unsubs = [];
+  stream.on("unsubscribed", (m) => unsubs.push(m));
+  stream.subscribe([CH]);
+  stream.subscribe({ subId: "a", channels: [CH] });
+  stream.subscribe({ subId: "b", channels: [CH2] });
+  await until(() => server.subscribes.length === 3);
+  stream.unsubscribe("a");
+  await until(() => unsubs.length === 1, 2000, "unsubscribed ack");
+  assert.deepEqual(server.unsubscribes[0], { type: "unsubscribe", sub_id: "a" });
+  assert.deepEqual(stream.getSubscriptions().map((s) => s.subId), ["default", "b"]);
+  // Reconnect: default + b only, in order.
+  server.last.serverClose(1006);
+  await until(() => server.subscribes.length === 5, 3000, "reconnect subscribes");
+  assert.deepEqual(server.subscribes.slice(3).map((m) => m.sub_id ?? null), [null, "b"]);
+  // unsubscribe(channels) still addresses the default subscription.
+  stream.unsubscribe([CH]);
+  await until(() => unsubs.length === 2);
+  assert.deepEqual(server.unsubscribes[1], { type: "unsubscribe", channels: [CH] });
+});
+
+test("overlap: one event matching two named subscriptions is delivered once PER subscription, deduped per (sub_id, id)", async () => {
+  const server = new FakeServer();
+  const { stream } = makeStream(server);
+  const seen = [];
+  stream.on(EV, (d, evt) => { seen.push(evt.sub_id); });
+  stream.subscribe({ subId: "a", channels: [CH] });
+  stream.subscribe({ subId: "b", channels: [CH] });
+  await until(() => server.subscribes.length === 2);
+  const f = server.liveTo(server.last, ["a", "b"], { seq: 1, id: "same-id" });
+  await until(() => seen.length === 2);
+  assert.deepEqual(seen, ["a", "b"], "same id, two subscriptions, two deliveries");
+  server.last.push({ ...f, sub_id: "a", replayed: true, recovered: "bus" }); // a's copy again → duplicate
+  server.last.push({ ...f, sub_id: "c" });                                     // a third subscription's copy → new
+  await until(() => seen.length === 3);
+  await sleep(20);
+  assert.deepEqual(seen, ["a", "b", "c"]);
+});
+
+test("resume with named subscriptions: every subscribe carries the cursor, one replay per subscription, commit at the smallest last_seq after the LAST replay_end", async () => {
+  const server = new FakeServer();
+  for (let i = 1; i <= 5; i++) server.frame({ seq: i });
+  const { stream, events } = makeStream(server, { resume: { instance: "inst-A", seq: 2, ts: 1_000_002 } });
+  const seen = [];
+  stream.on(EV, (d, evt) => { seen.push([evt.sub_id ?? null, evt.seq, evt.replayed === true]); });
+  // Between the two replays the server sees more traffic: the named
+  // subscription's replay covers further (to 7) than the default one's (to 5).
+  server.onSubscribe = (ws, msg) => { if (msg.sub_id === "x") { server.frame({ seq: 6 }); server.frame({ seq: 7 }); } return undefined; };
+  stream.subscribe([CH]);
+  stream.subscribe({ subId: "x", channels: [CH] });
+  await until(() => server.subscribes.length === 2);
+  assert.deepEqual(server.subscribes.map((m) => [m.sub_id ?? null, m.resume.seq]), [[null, 2], ["x", 2]]);
+  await until(() => events.replay.length === 1, 2000, "one aggregate replay event");
+  const r = events.replay[0];
+  assert.deepEqual(r.subscriptions, ["default", "x"]);
+  assert.equal(r.complete, true);
+  assert.equal(r.received, 3 + 5, "3 replayed for default (3,4,5) + 5 for x (3..7)");
+  assert.deepEqual(Object.keys(r.ends), ["default", "x"]);
+  assert.equal(r.end.sub_id, "x", "end = the last replay_end");
+  assert.equal(r.end.last_seq, 5, "aggregate last_seq = min over subscriptions");
+  assert.deepEqual(stream.getCursor(), { instance: "inst-A", seq: 5, ts: 1_000_005 }, "committed at the smallest last_seq/last_ts");
+  assert.equal(events.gap.length, 0);
+  assert.deepEqual(seen.filter(([s]) => s === null).map(([, q]) => q), [3, 4, 5]);
+  assert.deepEqual(seen.filter(([s]) => s === "x").map(([, q]) => q), [3, 4, 5, 6, 7]);
+  // A live frame after the chain commits as usual.
+  server.liveTo(server.last, ["x"], { seq: 8 });
+  await until(() => stream.getCursor().seq === 8);
+});
+
+test("resume with named subscriptions: the cursor does NOT commit while any subscription's replay is still pending", async () => {
+  const server = new FakeServer();
+  for (let i = 1; i <= 3; i++) server.frame({ seq: i });
+  const { stream, events } = makeStream(server, { resume: { instance: "inst-A", seq: 1, ts: 1_000_001 } });
+  // The named subscription's replay never ends on this connection (server-side queue stuck).
+  server.onSubscribe = (ws, msg) => {
+    if (msg.sub_id !== "y") return undefined;
+    ws.push({ type: "subscribed", sub_id: "y", channels: msg.channels, instance: server.instance, resume: { ...msg.resume, accepted: true, queued: true } });
+    return false;
+  };
+  stream.subscribe([CH]);
+  stream.subscribe({ subId: "y", channels: [CH] });
+  await until(() => server.subscribes.length === 2);
+  await sleep(150);
+  assert.equal(events.replay.length, 0, "no replay event before every replay_end");
+  assert.deepEqual(stream.getCursor(), { instance: "inst-A", seq: 1, ts: 1_000_001 }, "pre-resume cursor kept");
+  // The queued replay ends → aggregate + commit.
+  server.last.push({ type: "replay_start", sub_id: "y", mode: "ring", count: 0 });
+  server.last.push({ type: "replay_end", sub_id: "y", count: 0, sent: 0, matched: 0, complete: true, reason: null, last_seq: null, last_ts: null, live_from_seq: 4, mode: "ring", retryable: false, channels: { [CH]: { mode: "ring", sent: 0, complete: true } } });
+  await until(() => events.replay.length === 1, 2000, "replay after the last end");
+  assert.deepEqual(stream.getCursor(), { instance: "inst-A", seq: 3, ts: 1_000_003 });
+});
+
+test("resume with named subscriptions: an incomplete named replay keeps the cursor and only that subscription is retried", async () => {
+  const server = new FakeServer();
+  for (let i = 1; i <= 3; i++) server.frame({ seq: i });
+  const { stream, events } = makeStream(server, { resume: { instance: "inst-A", seq: 1, ts: 1_000_001 } });
+  server.onSubscribe = (ws, msg) => {
+    if (msg.sub_id !== "z" || server.subscribes.length > 2) return undefined;
+    ws.push({ type: "subscribed", sub_id: "z", channels: msg.channels, instance: server.instance, resume: { ...msg.resume, accepted: true } });
+    ws.push({ type: "replay_start", sub_id: "z", mode: "durable" });
+    ws.push({ type: "replay_end", sub_id: "z", count: 0, sent: 0, matched: 0, complete: false, reason: "source_busy", last_seq: null, last_ts: null,
+      live_from_seq: 4, mode: "durable", retryable: true, retry_after_ms: 20, channels: { [CH]: { mode: "durable", sent: 0, complete: false, reason: "source_busy", retryable: true } } });
+    return false;
+  };
+  stream.subscribe([CH]);
+  stream.subscribe({ subId: "z", channels: [CH] });
+  await until(() => events.gap.length === 1, 2000, "gap");
+  assert.equal(events.gap[0].retryable, true);
+  assert.deepEqual(Object.keys(events.gap[0].channels), [`z/${CH}`], "named channel entries are keyed sub_id/channel");
+  assert.deepEqual(stream.getCursor(), { instance: "inst-A", seq: 1, ts: 1_000_001 });
+  await until(() => server.subscribes.length === 3, 2000, "retry");
+  assert.equal(server.subscribes[2].sub_id, "z", "only the incomplete subscription is asked again");
+  await until(() => events.replay.length === 2, 2000, "second replay");
+  assert.equal(events.replay[1].complete, true);
+  assert.deepEqual(stream.getCursor(), { instance: "inst-A", seq: 3, ts: 1_000_003 });
+});
+
+test("listSubscriptions asks the server (list → subscriptions) and resolves with its answer", async () => {
+  const server = new FakeServer();
+  server.listReply = [{ sub_id: "default", channels: [CH], filters: {} }, { sub_id: "n", channels: [CH2], filters: { action: "buy" }, mints: 0 }];
+  const { stream } = makeStream(server);
+  stream.subscribe([CH]);
+  await until(() => server.subscribes.length === 1);
+  const list = await stream.listSubscriptions();
+  assert.deepEqual(list, [{ subId: "default", channels: [CH], filters: {} }, { subId: "n", channels: [CH2], filters: { action: "buy" } }]);
+  stream.close();
+  assert.deepEqual(await stream.listSubscriptions(), [{ subId: "default", channels: [CH], filters: {} }], "offline: the local view");
+});
+
+test("server warnings about a named subscription: too_many_subscriptions drops it locally; channels_revoked with sub_id trims that subscription only", async () => {
+  const server = new FakeServer();
+  const { stream, events } = makeStream(server);
+  stream.subscribe([CH, CH2]);
+  stream.subscribe({ subId: "q", channels: [CH, CH2] });
+  await until(() => server.subscribes.length === 2);
+  server.last.push({ type: "warning", code: "channels_revoked", sub_id: "q", channels: [CH2], revoked: [{ channel: CH2, reason: "requires ULTRA" }], tier: "PRO" });
+  await until(() => events.warning.length === 1);
+  assert.deepEqual(stream.getSubscriptions(), [{ subId: "default", channels: [CH, CH2], filters: {} }, { subId: "q", channels: [CH], filters: {} }]);
+  server.last.push({ type: "warning", code: "too_many_subscriptions", sub_id: "q", max: 5, tier: "PRO" });
+  await until(() => events.warning.length === 2);
+  assert.deepEqual(stream.getSubscriptions().map((s) => s.subId), ["default"]);
+  assert.equal(events.warning[1].sub_id, "q");
+});
+
+test("older server that ignores sub_id: a named subscribe acked without sub_id raises named_subscriptions_unsupported once", async () => {
+  const server = new FakeServer();
+  server.namedUnsupported = true;
+  const { stream, events } = makeStream(server);
+  stream.subscribe({ subId: "a", channels: [CH] });
+  stream.subscribe({ subId: "b", channels: [CH2] });
+  await until(() => events.subscribed.length === 2);
+  await sleep(20);
+  const w = events.warning.filter((x) => x.code === "named_subscriptions_unsupported");
+  assert.equal(w.length, 1);
+  assert.equal(w[0].sub_id, "a");
 });
