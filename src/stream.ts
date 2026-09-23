@@ -70,6 +70,13 @@ export type StreamEventName =
   | "token:graduation"
   | "token:price"             // on token:prices — a state tick: no id/seq, never replayed
   | "token:lock"
+  // Lock lifecycle on token:locks — only for a subscription with filters.lifecycle: true (2026-09-23)
+  | "token:lock_claimed"
+  | "token:lock_cancelled"
+  | "token:lock_closed"
+  | "token:lock_updated"
+  | "token:unlock_upcoming"
+  | "token:unlock_available"  // claimable per the schedule, NOT claimed
   | "token:fee_claim"
   | "token:surge"
   | "token:revival";
