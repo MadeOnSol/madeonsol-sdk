@@ -2420,6 +2420,268 @@ export type TokenLockLifecycleEvent =
   | TokenLockUpdatedEvent
   | TokenUnlockScheduleEvent;
 
+/* ── WS Phase 4 (2026-09-23): live candles, risk inputs, wallet scores ── */
+
+/**
+ * `token:candles` subscribe filters (PRO+). `mints` is REQUIRED (base58) and
+ * capped per CONNECTION across named subscriptions — PRO 25 / ULTRA 100 /
+ * BUSINESS 250, a budget separate from `token:prices`. Over the cap, a missing
+ * scope or a non-boolean `updates` rejects the channel, never truncates.
+ */
+export interface TokenCandlesFilters {
+  mints: string[];
+  /** Also receive the in-progress minute as `candle:update` (a state stream). Default false. */
+  updates?: boolean;
+}
+
+/**
+ * `candle:closed` frame `data` on `token:candles` — the STORED 1-minute row
+ * (`token_ohlc_1m`), identical live and on a durable resume. Every key is
+ * always present (null when unknown). Frame id =
+ * `candle:solana:<mint>:<bucket_start epoch s>` (not event-prefixed). A fully
+ * flat zero-trade candle (o = h = l = c, trades 0) is never emitted.
+ */
+export interface TokenCandleClosedEvent {
+  chain:               "solana";
+  mint:                string;
+  bucket_start:        string;
+  /** bucket_start + 60 s. */
+  bucket_end:          string;
+  /** When the row was first written (≈ ≤ 25 s after bucket_end). */
+  closed_at:           string | null;
+  open_price_usd:      number | null;
+  high_price_usd:      number | null;
+  low_price_usd:       number | null;
+  close_price_usd:     number | null;
+  open_mc_usd:         number | null;
+  high_mc_usd:         number | null;
+  low_mc_usd:          number | null;
+  close_mc_usd:        number | null;
+  open_liquidity_usd:  number | null;
+  close_liquidity_usd: number | null;
+  close_supply:        number | null;
+  volume_usd:          number | null;
+  volume_mev_usd:      number | null;
+  buy_volume_usd:      number | null;
+  sell_volume_usd:     number | null;
+  trades:              number | null;
+  buy_count:           number | null;
+  sell_count:          number | null;
+  dex:                 string | null;
+  pool_address:        string | null;
+  write_id:            string | null;
+  final:               true;
+  source:              "token_ohlc_1m";
+}
+
+/**
+ * `candle:update` frame `data` (only with `filters.updates: true`) — the
+ * producer's in-progress minute, ≤ 1 per mint per second. A state stream: no
+ * id / seq, never replayed, no snapshot on subscribe.
+ */
+export interface TokenCandleUpdateEvent {
+  chain:           "solana";
+  mint:            string;
+  bucket_start:    string;
+  bucket_end:      string;
+  open_price_usd:  number | null;
+  high_price_usd:  number | null;
+  low_price_usd:   number | null;
+  close_price_usd: number | null;
+  close_mc_usd:    number | null;
+  volume_usd:      number | null;
+  trades:          number | null;
+  final:           false;
+  /** The producer's timestamp of this state (ISO). */
+  as_of:           string | null;
+  source:          "mc-tracker:open_candle";
+}
+
+/** Event types on `token:risk`. */
+export type TokenRiskEventName = "risk:authority_changed" | "risk:supply_inflated";
+
+/**
+ * `token:risk` subscribe filters (PRO+). `mints` is REQUIRED (base58), capped
+ * per connection PRO 25 / ULTRA 100 / BUSINESS 250. Invalid values reject the
+ * channel (`channels_rejected`) or the whole update (`invalid_filters`).
+ */
+export interface TokenRiskFilters {
+  mints: string[];
+  /** Non-empty subset of the channel's event types. */
+  risk_events?: TokenRiskEventName[];
+  /** Send one `risk:inputs` snapshot per mint on subscribe / scope change / resume. Default true. */
+  risk_snapshot?: boolean;
+}
+
+/**
+ * `risk:authority_changed` — the stored mint / freeze authority went from not
+ * revoked to revoked (once per mint + field, ever), or the Token-2022 transfer
+ * fee changed with both values known. Never a re-enable, never a first
+ * observation. Frame id = `risk:authority_changed:<event_key>`.
+ */
+export interface TokenRiskAuthorityChangedEvent {
+  chain:                    "solana";
+  mint:                     string;
+  /** `<mint>:mint_authority:revoked` | `<mint>:freeze_authority:revoked` | `<mint>:transfer_fee:<before>><after>:<observed_at ms>`. */
+  event_key:                string;
+  field:                    "mint_authority" | "freeze_authority" | "transfer_fee";
+  /** `{revoked}` for the authorities, `{transfer_fee_bps}` for the fee. */
+  before:                   { revoked: boolean } | { transfer_fee_bps: number };
+  after:                    { revoked: boolean } | { transfer_fee_bps: number };
+  /** The full picture after the change. */
+  mint_authority_revoked:   boolean | null;
+  freeze_authority_revoked: boolean | null;
+  transfer_fee_bps:         number | null;
+  is_token_2022:            boolean | null;
+  /** When mc-tracker parsed the mint account that showed the change. */
+  observed_at:              string | null;
+  /** The parse before: the change happened on chain in between. */
+  previous_observed_at:     string | null;
+  written_at:               string;
+  slot:                     null;
+  source:                   "token_prices";
+}
+
+/**
+ * `risk:supply_inflated` — the first `supply_drift_events` row for the mint
+ * reaching a level (warn 0.5 % / danger 5 %). Per-observation drift, not a
+ * cumulative inflation. Frame id = `risk:supply_inflated:<event_key>`.
+ */
+export interface TokenRiskSupplyInflatedEvent {
+  chain:               "solana";
+  mint:                string;
+  /** `<mint>:supply_inflated:warn` | `<mint>:supply_inflated:danger`. */
+  event_key:           string;
+  level:               "warn" | "danger";
+  /** 0.5 (warn) | 5 (danger). */
+  threshold_pct:       number;
+  /** drift / expected of one drift row, in percent, 4 dp. */
+  inflation_pct:       number;
+  /** Integer strings. */
+  expected_supply_raw: string;
+  onchain_supply_raw:  string;
+  drift_raw:           string;
+  detected_at:         string;
+  drift_event_id:      number;
+  window_days:         30;
+  written_at:          string;
+  slot:                null;
+  source:              "supply_drift_events";
+}
+
+/**
+ * `risk:inputs` snapshot frame `data` (frame `snapshot: true`, no id / seq):
+ * the CURRENT stored risk inputs of one scoped mint. Not the score or band —
+ * `GET /tokens/{mint}/risk` computes those.
+ */
+export interface TokenRiskInputsSnapshot {
+  chain:                    "solana";
+  mint:                     string;
+  /** false = the mint is not in the price table (every input null). */
+  tracked:                  boolean;
+  mint_authority_revoked:   boolean | null;
+  freeze_authority_revoked: boolean | null;
+  transfer_fee_bps:         number | null;
+  is_token_2022:            boolean | null;
+  authority_observed_at:    string | null;
+  /** Worst positive supply drift in the last 30 days; null when none. `level` null below 0.5 %. */
+  supply_inflation: {
+    inflation_pct: number;
+    level:         "warn" | "danger" | null;
+    detected_at:   string | null;
+    window_days:   30;
+  } | null;
+  source: "token_prices+supply_drift_events";
+}
+
+/** Any event payload on `token:risk` — narrow on the frame's `event`. */
+export type TokenRiskEvent = TokenRiskAuthorityChangedEvent | TokenRiskSupplyInflatedEvent;
+
+/** Event types on `wallet:scores`. */
+export type WalletScoreEventName = "deployer:tier_changed" | "kol:score_state_changed";
+
+/**
+ * `wallet:scores` subscribe filters (PRO+). `wallets` is REQUIRED — base58
+ * deployer or KOL wallets — capped per connection per chain PRO 25 / ULTRA 100
+ * / BUSINESS 250. A subscription that also holds `rhc:wallet_scores` may mix
+ * in 0x addresses; an entry of a chain the subscription does not hold is refused.
+ */
+export interface WalletScoresFilters {
+  wallets: string[];
+  /** Optional subset of the held channels' event types (e.g. `"rhc:deployer_tier_changed"` when mixing chains). */
+  score_events?: Array<WalletScoreEventName | "rhc:deployer_tier_changed">;
+}
+
+/**
+ * Where a score event came from. `computed_at` means "recomputed at T", not
+ * "changed at T": `live_write` = a bond / deploy re-classified the deployer
+ * (real time); `scheduled_recompute` = the 6-hourly stats worker (can lag the
+ * stats by hours); `matview_refresh` = the KOL diff after each 10-min refresh.
+ */
+export type WalletScoreSource = "live_write" | "scheduled_recompute" | "matview_refresh";
+
+/** Solana deployer tier values on `deployer:tier_changed`. */
+export type DeployerTierChangeValue = "elite" | "good" | "rising" | "moderate" | "cold" | "unranked";
+
+/**
+ * `deployer:tier_changed` — `deployers.tier` changed. Frame id =
+ * `deployer:tier_changed:<event_key>`. A wallet appearing is not an event;
+ * entering a ranked tier is (`entered_ranking: true`, `tier_before: "unranked"`).
+ */
+export interface DeployerTierChangedEvent {
+  /** `<wallet>:<tier_before>><tier_after>:<txid>`. */
+  event_key:       string;
+  chain:           "solana";
+  wallet:          string;
+  tier_before:     DeployerTierChangeValue | null;
+  tier_after:      DeployerTierChangeValue | null;
+  entered_ranking: boolean;
+  is_tracked:      boolean | null;
+  /** As of the write. */
+  stats: {
+    total_tokens_deployed: number | null;
+    total_bonded:          number | null;
+    instant_bonds:         number | null;
+    bonding_rate:          number | null;
+    recent_bond_rate:      number | null;
+    recent_outcomes:       string | null;
+  };
+  computed_at: string;
+  source:      WalletScoreSource;
+}
+
+/** The categorical KOL score fields diffed on `kol:score_state_changed`. */
+export interface KolScoreState {
+  is_cold:           boolean | null;
+  is_heating_up:     boolean | null;
+  auto_strategy_tag: KolStrategy | null;
+}
+
+/**
+ * `kol:score_state_changed` — one event per KOL per `mv_kol_scores` refresh
+ * where `is_cold`, `is_heating_up` or `auto_strategy_tag` differs (fields never
+ * split). Frame id = `kol:score_state_changed:<event_key>`.
+ */
+export interface KolScoreStateChangedEvent {
+  /** `<wallet>:<computed_at epoch ms>`. */
+  event_key:     string;
+  chain:         "solana";
+  wallet:        string;
+  kol_wallet_id: string | null;
+  kol_name:      string | null;
+  /** All three for a KOL first seen after the seed. */
+  changed:       Array<keyof KolScoreState>;
+  /** null for a first appearance. */
+  before:        KolScoreState | null;
+  after:         KolScoreState;
+  computed_at:   string;
+  source:        "matview_refresh";
+  matview:       "mv_kol_scores";
+}
+
+/** Any event payload on `wallet:scores` — narrow on the frame's `event`. */
+export type WalletScoreEvent = DeployerTierChangedEvent | KolScoreStateChangedEvent;
+
 /* ── pump.fun creator-fee sharing & fee claims — GET /tokens/{mint}/fee-shares, /tokens/fee-claims ── */
 
 /** pump.fun fee event types (`creator_claim` is excluded from the feed unless requested via `type=`). */

@@ -36,7 +36,11 @@ export type StreamChannel =
   | "token:prices"            // PRO+, mint-scoped: REQUIRES filters.mints (PRO 25 / ULTRA 100 / BUSINESS 250)
   | "token:locks"
   | "token:fee_claims"
-  | "token:surges";
+  | "token:surges"
+  | "token:candles"           // PRO+, mint-scoped: REQUIRES filters.mints (own cap: PRO 25 / ULTRA 100 / BUSINESS 250), filters.updates adds the open minute
+  | "token:risk"              // PRO+, mint-scoped: REQUIRES filters.mints — risk-INPUT changes + a risk:inputs snapshot on subscribe
+  // PRO+, wallet-scoped: REQUIRES filters.wallets — deployer tier + KOL score-state changes
+  | "wallet:scores";
 
 /** Every Solana channel, in the server's order. */
 export const STREAM_CHANNELS: readonly StreamChannel[] = [
@@ -53,6 +57,9 @@ export const STREAM_CHANNELS: readonly StreamChannel[] = [
   "token:locks",
   "token:fee_claims",
   "token:surges",
+  "token:candles",
+  "token:risk",
+  "wallet:scores",
 ];
 
 /** Event names delivered on those channels (subscribe to a channel, receive these). */
@@ -79,7 +86,15 @@ export type StreamEventName =
   | "token:unlock_available"  // claimable per the schedule, NOT claimed
   | "token:fee_claim"
   | "token:surge"
-  | "token:revival";
+  | "token:revival"
+  // WS Phase 4 (2026-09-23)
+  | "candle:closed"           // on token:candles — the stored 1-minute row (TokenCandleClosedEvent)
+  | "candle:update"           // on token:candles with filters.updates: true — in-progress minute, a state stream (no id/seq)
+  | "risk:authority_changed"  // on token:risk (TokenRiskAuthorityChangedEvent)
+  | "risk:supply_inflated"    // on token:risk (TokenRiskSupplyInflatedEvent)
+  | "risk:inputs"             // on token:risk — snapshot frame (frame.snapshot === true), current stored inputs per mint
+  | "deployer:tier_changed"   // on wallet:scores (DeployerTierChangedEvent)
+  | "kol:score_state_changed"; // on wallet:scores (KolScoreStateChangedEvent)
 
 /** Minimal stream-token shape the client needs (token + ws_url). */
 export interface StreamTokenLike {
