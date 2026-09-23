@@ -1344,6 +1344,16 @@ console.log(await stream.listSubscriptions()); // [{ subId, channels, filters },
 stream.unsubscribe("deploys");
 ```
 
+#### Lock lifecycle on `token:locks` *(server 2026-09-23)*
+
+Add `filters.lifecycle: true` to a `token:locks` subscription to also receive `token:lock_claimed`, `token:lock_cancelled`, `token:lock_closed`, `token:lock_updated` (`change`: `topup` | `extended` | `schedule_changed` | `recipient_changed`), `token:unlock_upcoming` (next unlock within 24 h) and `token:unlock_available` (passed within 30 min — **claimable per the schedule, not claimed**). Without `lifecycle` the channel is unchanged. Optional `events[]`, `unlock_kinds[]`, `mints[]` (≤ 500) and `include_automatic_claims` (default `false`: Streamflow keeper-cranked withdrawals, ~90 % of claims, are hidden unless set). Types `TokenLockLifecycleFilters` / `TokenLockLifecycleEvent`; raw string amounts, no USD field, no events for history.
+
+```ts
+const stream = client.stream.connect();
+stream.subscribe({ subId: "locks", channels: ["token:locks"], filters: { lifecycle: true, events: ["token:lock_claimed", "token:unlock_available"], mints: [MINT] } });
+stream.on("token:unlock_available", (e: TokenUnlockScheduleEvent) => console.log(e.unlock_kind, e.amount_raw, "claimable, not claimed"));
+```
+
 #### `client.stream.sessions()` / `client.stream.deleteSession(id)` *(new in 2.17 — PRO+)*
 
 Audit and evict your **live** WebSocket sessions across the KOL/deployer (`ws-streaming`) and all-DEX (`dex-stream`) services. `sessions()` lists each open connection; `deleteSession(id)` force-closes one — handy for freeing a connection slot held by a ghost/stale socket after a network drop.
@@ -1398,6 +1408,16 @@ ws.on("message", (raw) => {
     console.log(msg.sub_id, msg.data.dex, msg.data.action, msg.data.sol_amount);
   }
 });
+```
+
+#### Liquidity events — `dex:liquidity` *(server 2026-09-23)*
+
+Add `liquidity: true` (in addition to trades) or `liquidity: "only"` to a subscribe for one `dex:liquidity` frame per liquidity instruction: `action` `pool_created` | `add` | `remove`, `id` = `<signature>:<ix>[.<inner>]`, `pool`, `mints[]` (raw `amount_raw`, `side` in/out), `reserves_before[]` / `reserves_after[]`, `share_of_reserves` (constant-product only), `material` (a removal of ≥ 25 % of reserves), `depth_effect`. Filters `pool(s)`, `actions[]`, `min_share_of_reserves`, `material_only`. Only fixture-verified instructions are emitted; concentrated pools report share/depth as unknown; DAMM v1, LaunchLab and Moonshot are not emitted; no USD field (`min_usd` is rejected); ring replay only.
+
+```ts
+ws.send(JSON.stringify({ type: "subscribe", sub_id: "lp-pulls", liquidity: "only",
+  filters: { dex: ["raydium", "pumpswap", "meteora"], actions: ["remove"], material_only: true } }));
+// → { channel: "dex:liquidity", sub_id: "lp-pulls", id, data: { action, pool, mints, share_of_reserves, material, ... } }
 ```
 
 #### Protocol — client → server
