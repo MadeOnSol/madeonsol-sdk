@@ -1301,7 +1301,7 @@ stream.subscribe(["kol:trades", "deployer:alerts"]);
 // stream.unsubscribe([...]) / stream.close() when done
 ```
 
-Channels: `kol:trades`, `kol:coordination`, `kol:first_touches`, `deployer:alerts`, `wallet_tracker:events`, `copytrade:signals`, `price_alert:events`, `sniper:deploys`, `token:graduations`, `token:prices` (**new** in the channel list — event `token:price`, per-mint price/MC ticks; PRO+, REQUIRES `filters.mints` — PRO 25 / ULTRA 100 / BUSINESS 250 per connection; a state stream, so ticks carry no id/seq and are never replayed) (every pump.fun graduation in real time, tracked deployer or not — typed `GraduationEvent`), `token:locks` (**new 2.25** — event `token:lock` for every NEW Streamflow / Jupiter Lock / Bonfida lock or vesting contract, typed `TokenLockStreamEvent`; PRO+; updates are not pushed — poll `client.token.locks()`), `token:fee_claims` (**new 2.25** — event `token:fee_claim` for every pump.fun fee event: distributions, social-handle claims, config changes, typed `TokenFeeClaimStreamEvent`; PRO+), `token:surges` (**new 2.26** — events `token:surge` / `token:revival` the moment a momentum fire is confirmed, typed `TokenSurgeStreamEvent` with `tape` / `kol` / `early_buyers` / `deployer` / `risk_flags[]`; server-side filters `kinds[]`, `tiers[]`, `launchpads[]`, `exclude_flags[]`, `min_mc_usd` / `max_mc_usd`, `deployer_tier[]` — typed `TokenSurgesSubscribeFilters`; PRO+; the +1 h `outcome` is REST-only — poll `client.token.surges()`). Lifecycle: `open`, `close`, `reconnect`, `subscribed`, `heartbeat`, `warning`, `cursor`, `replay`, `gap`, `fatal`, `error`. Node 22+ uses the global `WebSocket`; on Node < 22 also `npm i ws`.
+Channels: `kol:trades`, `kol:coordination`, `kol:first_touches`, `deployer:alerts`, `wallet_tracker:events`, `copytrade:signals`, `price_alert:events`, `sniper:deploys`, `token:graduations`, `token:prices` (**new** in the channel list — event `token:price`, per-mint price/MC ticks; PRO+, REQUIRES `filters.mints` — PRO 25 / ULTRA 100 / BUSINESS 250 per connection; a state stream, so ticks carry no id/seq and are never replayed) (every pump.fun graduation in real time, tracked deployer or not — typed `GraduationEvent`), `token:locks` (**new 2.25** — event `token:lock` for every NEW Streamflow / Jupiter Lock / Bonfida lock or vesting contract, typed `TokenLockStreamEvent`; PRO+; updates are not pushed — poll `client.token.locks()`), `token:fee_claims` (**new 2.25** — event `token:fee_claim` for every pump.fun fee event: distributions, social-handle claims, config changes, typed `TokenFeeClaimStreamEvent`; PRO+), `token:surges` (**new 2.26** — events `token:surge` / `token:revival` the moment a momentum fire is confirmed, typed `TokenSurgeStreamEvent` with `tape` / `kol` / `early_buyers` / `deployer` / `risk_flags[]`; server-side filters `kinds[]`, `tiers[]`, `launchpads[]`, `exclude_flags[]`, `min_mc_usd` / `max_mc_usd`, `deployer_tier[]` — typed `TokenSurgesSubscribeFilters`; PRO+; the +1 h `outcome` is REST-only — poll `client.token.surges()`), `token:candles`, `token:risk`, `wallet:scores` (**new, server 2026-09-23** — live 1-minute candles, risk-input changes and wallet-score changes; all PRO+ and scoped, see below). Lifecycle: `open`, `close`, `reconnect`, `subscribed`, `heartbeat`, `warning`, `cursor`, `replay`, `gap`, `fatal`, `error`. Node 22+ uses the global `WebSocket`; on Node < 22 also `npm i ws`.
 
 ##### Recovery: cursor, resume, de-duplication *(new in 2.28.0)*
 
@@ -1352,6 +1352,24 @@ Add `filters.lifecycle: true` to a `token:locks` subscription to also receive `t
 const stream = client.stream.connect();
 stream.subscribe({ subId: "locks", channels: ["token:locks"], filters: { lifecycle: true, events: ["token:lock_claimed", "token:unlock_available"], mints: [MINT] } });
 stream.on("token:unlock_available", (e: TokenUnlockScheduleEvent) => console.log(e.unlock_kind, e.amount_raw, "claimable, not claimed"));
+```
+
+#### Candles, risk inputs and wallet scores *(server 2026-09-23)*
+
+Three PRO+ channels, all **scoped** (per-connection cap PRO 25 / ULTRA 100 / BUSINESS 250, counted across named subscriptions; over the cap or without a scope the channel is rejected, never truncated):
+
+- **`token:candles`** — `filters.mints` (REQUIRED, a budget separate from `token:prices`). `candle:closed` carries the stored 1-minute row (`TokenCandleClosedEvent`, id `candle:solana:<mint>:<bucket epoch s>`, ≈ ≤ 25 s after the minute ends; fully flat zero-trade minutes are skipped) and resumes durably. `filters.updates: true` adds `candle:update`, the in-progress minute (`TokenCandleUpdateEvent`, ≤ 1 per mint per second, a state stream: no id, never replayed, no snapshot). Filters `TokenCandlesFilters`.
+- **`token:risk`** — `filters.mints` (REQUIRED). Risk-INPUT changes, not a score stream: `risk:authority_changed` (mint / freeze authority revoked, Token-2022 transfer fee changed) and `risk:supply_inflated` (first crossing of 0.5 % / 5 % supply drift), plus one `risk:inputs` snapshot frame per mint (`frame.snapshot === true`) on subscribe, scope change and resume. Optional `risk_events[]`, `risk_snapshot` (default `true`). Types `TokenRiskFilters`, `TokenRiskAuthorityChangedEvent`, `TokenRiskSupplyInflatedEvent`, `TokenRiskInputsSnapshot`.
+- **`wallet:scores`** — `filters.wallets` (REQUIRED, base58). `deployer:tier_changed` (`DeployerTierChangedEvent`; `entered_ranking: true` when a wallet leaves `unranked`) and `kol:score_state_changed` (`is_cold` / `is_heating_up` / `auto_strategy_tag`, `KolScoreStateChangedEvent`). Every frame carries `computed_at` + `source` (`live_write` / `scheduled_recompute` / `matview_refresh`): "recomputed at T", not "changed at T". Optional `score_events[]`.
+
+```ts
+const stream = client.stream.connect();
+stream.subscribe({ subId: "candles", channels: ["token:candles"], filters: { mints: [MINT], updates: true } });
+stream.subscribe({ subId: "risk", channels: ["token:risk"], filters: { mints: [MINT] } });
+stream.subscribe({ subId: "scores", channels: ["wallet:scores"], filters: { wallets: [DEPLOYER] } });
+stream.on("candle:closed", (c: TokenCandleClosedEvent) => console.log(c.bucket_start, c.open_price_usd, c.close_price_usd, c.volume_usd));
+stream.on("risk:authority_changed", (e: TokenRiskAuthorityChangedEvent) => console.log(e.mint, e.field, e.before, "→", e.after));
+stream.on("deployer:tier_changed", (e: DeployerTierChangedEvent) => console.log(e.wallet, e.tier_before, "→", e.tier_after, e.source));
 ```
 
 #### `client.stream.sessions()` / `client.stream.deleteSession(id)` *(new in 2.17 — PRO+)*
