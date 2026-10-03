@@ -46,6 +46,26 @@ export interface PaginationParams {
   offset?: number;
 }
 
+/** Free (BASIC) tier 5-minute delay metadata — present only on delayed feed responses. */
+export interface FreeTierDelayMeta {
+  /** e.g. "5m" */
+  delay?: string;
+  delay_seconds?: number;
+  /** The delayed cutoff the page was served at. */
+  as_of?: string;
+  delay_note?: string;
+  /** Pricing URL. */
+  upgrade?: string;
+}
+
+/** Present when a filter was applied after the candidate fetch. `scan_truncated: true` means more matches MAY exist past `next_cursor`. */
+export interface FeedScanInfo {
+  post_filtered: boolean;
+  scanned: number;
+  scan_truncated: boolean;
+  scan_budget: number;
+}
+
 // ─── KOL types ───────────────────────────────────────────────────────────────
 
 export type KolAction = "buy" | "sell";
@@ -65,8 +85,14 @@ export type KolWalletInclude = "pnl_by_token" | "recent_winners" | "recent_loser
 export interface KolFeedParams {
   /** Number of trades to return (1–100). Default: 50. */
   limit?: number;
-  /** Cursor — return trades strictly older than this ISO 8601 timestamp. Pass `next_before` from the previous response. */
+  /** LEGACY cursor — return trades strictly older than this ISO 8601 timestamp (skips same-timestamp rows). Prefer `cursor`. */
   before?: string;
+  /** PREFERRED pagination: `next_cursor` from the previous page — opaque strict (traded_at, id) keyset. Cannot be combined with `before`. */
+  cursor?: string;
+  /** Poll cursor — only trades strictly newer than this ISO time (feed back `next_since`). */
+  since?: string;
+  /** "token" embeds the /token/{mint} snapshot on each row (≤20 distinct mints per page). */
+  include?: "token";
   /** Filter by trade direction. */
   action?: KolAction;
   /** Filter by a specific KOL wallet address. */
@@ -163,14 +189,34 @@ export interface KolTrade {
   token_age_minutes?: number | null;
   deployer?: KolTradeDeployer | null;
   deployer_tier?: string | null;
+  /** include=token only — the /token/{mint} snapshot (null past the 20-mint cap). */
+  token?: TokenResponseBody | null;
 }
 
-export interface KolFeedResponse {
+export interface KolFeedResponse extends FreeTierDelayMeta {
   trades: KolTrade[];
   count: number;
   data_age_seconds?: number | null;
-  /** Cursor for the next page — pass as `before` to fetch older trades. */
+  /** LEGACY strict timestamp cursor (skips same-timestamp siblings) — pass as `before`. Prefer `next_cursor`. */
   next_before?: string | null;
+  /** Pass as `cursor` for the next (older) page; null at the end. */
+  next_cursor?: string | null;
+  /** false only when the candidate feed is exhausted — never inferred from a short filtered page. */
+  has_more?: boolean;
+  /** Present when a filter was applied after the candidate fetch. */
+  scan?: FeedScanInfo;
+  /** Poll cursor — pass as `since` to fetch only newer rows. */
+  next_since?: string | null;
+  /** Echo of the `since` parameter. */
+  since?: string | null;
+  /** WebSocket channel (`kol:trades`) that pushes the same rows. */
+  stream?: TokenFeedStreamPointer;
+  /** Present only when include= was honoured. */
+  included?: Array<"token">;
+  /** Present only when include=token hit the 20-distinct-mint cap. */
+  include_truncated?: { token: string[]; note: string };
+  /** Present only when an unknown include= value was sent. */
+  include_errors?: Record<string, { status: number; error: string }>;
   _rid?: string;
 }
 
@@ -198,12 +244,44 @@ export interface KolLeaderboardEntry {
   median_hold_minutes_30d?: number | null;
   /** Percentile rank for early entry (0–100) over the last 30 days. */
   percentile_early_entry_30d?: number | null;
+  /** Number of buys with a known entry MC in the period; null when that read failed (`entry_mc_complete: false`). */
+  entry_mc_samples?: number | null;
+  /** Average entry market cap (USD) over the period; null when unknown. */
+  avg_entry_mc_usd?: number | null;
+}
+
+export interface KolLeaderboardPagination {
+  limit: number;
+  offset: number;
+  returned: number;
+  /** Entries in the filtered universe. */
+  total: number;
+  has_more: boolean;
+}
+
+/** The fixed ranked set pagination walks (top KOLs by realized PnL for the period). */
+export interface KolLeaderboardUniverse {
+  kind: string;
+  period: string;
+  max_size: number;
+  size: number;
+  note: string;
 }
 
 export interface KolLeaderboardResponse {
   leaderboard: KolLeaderboardEntry[];
+  pagination?: KolLeaderboardPagination;
+  universe?: KolLeaderboardUniverse;
+  /** Start of the entry-MC aggregation window (ISO). */
+  entry_mc_window_start?: string | null;
+  /** false when the entry-MC read failed (entry MC fields are then null). */
+  entry_mc_complete?: boolean;
   period: string;
   sort?: string | null;
+  /** Echo — present only when the filter was sent. */
+  strategy?: string;
+  /** Echo — present only when the filter was sent. */
+  min_winrate?: number;
   _rid?: string;
 }
 
@@ -478,10 +556,40 @@ export interface ScoutLeaderboardParams {
 
 // ─── KOL consensus (v1.9) ──────────────────────────────────────────────────
 
+/**
+ * GET /tokens/{mint}/kol-consensus. FIX (2026-10-03 parity): the figures are
+ * nested under `consensus` — that is what the route has always returned;
+ * earlier versions of this type declared them at the top level, where they were
+ * always undefined. With no KOL trades: `consensus: null`,
+ * `total_kol_buyers: 0`, `total_kol_sellers: 0`, `complete: true`.
+ */
 export interface KolConsensusResponse {
+  mint: string;
+  current_mc_usd?: number | null;
+  current_price_usd?: number | null;
+  consensus: KolConsensus | null;
+  /** Only on the no-trades answer (then 0). */
+  total_kol_buyers?: number;
+  total_kol_sellers?: number;
+  complete?: boolean;
+  _rid?: string;
+}
+
+/** The `consensus` block of {@link KolConsensusResponse}. */
+export interface KolConsensus {
   total_kol_buyers: number;
   total_kol_sellers: number;
+  /** Share of KOL buyers with >=1 recorded sell (any size) — NOT a full position exit. */
   kol_exit_rate: number | null;
+  /** Accurately named copy of kol_exit_rate. */
+  kol_any_sell_rate?: number | null;
+  /** false when the trade read hit its row ceiling (numbers cover the oldest rows_scanned trades). */
+  complete?: boolean;
+  truncated?: boolean;
+  rows_scanned?: number;
+  /** Definition string for kol_exit_rate. */
+  kol_exit_rate_definition?: string;
+  total_trades?: number;
   net_flow_sol: number;
   total_buy_sol: number;
   total_sell_sol: number;
@@ -494,12 +602,26 @@ export interface KolConsensusResponse {
   buyers?: string[];
   /** ULTRA only — wallets that fully exited. */
   exited?: string[];
-  _rid?: string;
 }
 
 // ─── Peak history (v1.9) ───────────────────────────────────────────────────
 
+/**
+ * GET /tokens/{mint}/peak-history. FIX (2026-10-03 parity): the figures are
+ * nested under `peak_history` (null with `found: false` for an unknown mint);
+ * earlier versions of this type declared them at the top level, where they were
+ * always undefined.
+ */
 export interface PeakHistoryResponse {
+  mint: string;
+  found: boolean;
+  token?: { name: string | null; symbol: string | null; image_url: string | null };
+  peak_history: PeakHistory | null;
+  _rid?: string;
+}
+
+/** The `peak_history` block of {@link PeakHistoryResponse}. */
+export interface PeakHistory {
   peak_mc_usd: number | null;
   peak_mc_updated_at: string | null;
   current_mc_usd: number | null;
@@ -514,6 +636,62 @@ export interface PeakHistoryResponse {
   time_to_bond_minutes: number | null;
   deployed_at: string | null;
   bonded_at: string | null;
+  mc_tracking_complete?: boolean | null;
+}
+
+// ─── Token top traders ──────────────────────────────────────────────────────
+
+export interface TokenTopTradersParams {
+  /** 1-25 on PRO, up to 100 on ULTRA+. */
+  limit?: number;
+  /** Rank axis. Default "pnl". */
+  sort?: "pnl" | "roi";
+  /** Lookback window in days (1-180, default 90). */
+  window_days?: number;
+  /** Minimum SOL bought to qualify (default 0.1). */
+  min_bought_sol?: number;
+}
+
+/** One wallet in a top-traders response, enriched with KOL identity + alpha-wallet stats. */
+export interface TokenTopTrader {
+  rank: number;
+  wallet: string;
+  trades: number;
+  buys: number;
+  sells: number;
+  bought_sol: number;
+  sold_sol: number;
+  realized_pnl_sol: number;
+  unrealized_pnl_sol: number;
+  total_pnl_sol: number;
+  held_value_sol: number;
+  roi: number | null;
+  still_holding: boolean;
+  first_trade_at: string;
+  last_trade_at: string;
+  is_kol: boolean;
+  kol_name: string | null;
+  is_alpha_tracked: boolean;
+  bot_confidence: "low" | "medium" | "high" | "none" | null;
+  historical_win_rate: number | null;
+  historical_pnl_sol: number | null;
+  historical_tokens: number | null;
+}
+
+export interface TokenTopTradersResponse {
+  mint: string;
+  sort: "pnl" | "roi";
+  window_days: number;
+  traders: TokenTopTrader[];
+  summary: {
+    returned: number;
+    known_kols: number;
+    known_alpha_wallets: number;
+    net_realized_pnl_sol: number;
+  };
+  /** Trade-coverage disclosure; when `in_scope` is false an empty `traders`
+   *  list means "outside the write-gate", not "nobody traded". */
+  coverage?: TradeCoverage;
   _rid?: string;
 }
 
@@ -532,8 +710,10 @@ export type ScoutTier = "S" | "A" | "B" | "C";
 export interface FirstTouchesParams {
   /** ISO datetime — return events strictly newer than this. Polling cursor. */
   since?: string;
-  /** ISO datetime — return events strictly older than this. Pagination cursor. */
+  /** ISO datetime — return events strictly older than this. LEGACY pagination (skips same-timestamp rows); prefer `cursor`. */
   before?: string;
+  /** PREFERRED pagination: `next_cursor` from the previous page — opaque strict keyset. Cannot be combined with `before`. */
+  cursor?: string;
   /** 1–100. Default: 50 (BASIC capped at 20). */
   limit?: number;
   /** Single KOL wallet (32–44 base58 chars). */
@@ -592,11 +772,24 @@ export interface FirstTouchEvent {
   last_price_usd?: number | null;
 }
 
-export interface FirstTouchesResponse {
+export interface FirstTouchesResponse extends FreeTierDelayMeta {
   events: FirstTouchEvent[];
   count: number;
+  /** LEGACY strict timestamp cursor — prefer `next_cursor`. */
   next_before: string | null;
+  /** Pass as `cursor` for the next (older) page; null at the end. */
+  next_cursor?: string | null;
+  /** false only when the candidate feed is exhausted. */
+  has_more?: boolean;
+  /** Present when a filter was applied after the candidate fetch. */
+  scan?: FeedScanInfo;
+  /** Poll cursor — pass as `since` for only-newer rows. */
+  next_since?: string | null;
+  /** Echo of the `since` parameter. */
+  since?: string | null;
   data_age_seconds: number | null;
+  /** WebSocket channel (`kol:first_touches`) that pushes the same rows. */
+  stream?: TokenFeedStreamPointer;
   _rid?: string;
 }
 
@@ -1049,8 +1242,12 @@ export interface DeployerTokensParams extends PaginationParams {
 export interface DeployerAlertsParams extends PaginationParams {
   /** ISO 8601 datetime — return alerts since this time. */
   since?: string;
-  /** Cursor — return alerts strictly older than this ISO 8601 timestamp. Pass `next_before` from the previous response. Preferred over `offset` at scale. */
+  /** LEGACY cursor — return alerts strictly older than this ISO 8601 timestamp (skips same-timestamp siblings). Prefer `cursor`. */
   before?: string;
+  /** PREFERRED pagination: `next_cursor` from the previous page — opaque strict (created_at, id) keyset. Not combinable with `before` / `offset`. */
+  cursor?: string;
+  /** Only alerts for this token mint. */
+  token_mint?: string;
   /** Max results (1–50). Default: 20. */
   limit?: number;
   /**
@@ -1119,6 +1316,10 @@ export interface DeployerSummary {
   /** Confidence denominator; gate on >=3. */
   labeled_tokens?: number | null;
   avg_time_to_bond_minutes?: number | null;
+  /** Populated on alert rows. */
+  instant_bonds?: number | null;
+  /** Count of labeled tokens that ran. Populated on alert rows. */
+  runner_tokens?: number | null;
 }
 
 export interface DeployerLeaderboardEntry {
@@ -1163,6 +1364,76 @@ export interface DeployerToken {
   peak_market_cap_usd: number | null;
 }
 
+/** A LaunchLab (bonk) / bags token from our own DB on GET /deployer-hunter/{wallet}. */
+export interface DeployerLaunchpadToken {
+  mint: string;
+  name: string | null;
+  symbol: string | null;
+  /** e.g. "launchlab" (bonk) | "bags". */
+  launchpad: string;
+  /** Graduated / bonded. */
+  complete: boolean;
+  deployed_at: string;
+  bonded_at: string | null;
+  peak_market_cap: number | null;
+}
+
+/** The `deployers` row inside {@link DeployerProfileResponse}. */
+export interface DeployerProfileRow {
+  id: string;
+  wallet_address: string;
+  total_tokens_deployed: number;
+  total_bonded: number;
+  instant_bonds: number | null;
+  bonding_rate: number | null;
+  recent_bond_rate: number | null;
+  tier: DeployerTier | null;
+  is_tracked: boolean;
+  avg_time_to_bond_minutes: number | null;
+  best_token_peak_mc: number | null;
+  avg_peak_mc: number | null;
+  recent_outcomes: unknown;
+  /** Fraction of labeled tokens that ran (peak ≥ 60 min). Gate on `labeled_tokens` ≥ 3. */
+  runner_rate: number | null;
+  runner_tokens: number | null;
+  labeled_tokens: number | null;
+  post_bond_survival_rate: number | null;
+  post_bond_2x_rate: number | null;
+  post_bond_labeled_count: number | null;
+  first_seen_at: string | null;
+  last_deploy_at: string | null;
+  last_bond_at: string | null;
+  label: string | null;
+}
+
+/**
+ * `GET /deployer-hunter/{wallet}` — what `client.deployer.profile()` returns.
+ * The route has always nested the deployer row under `deployer` (null with
+ * `is_deployer: false` for an untracked wallet); the earlier flat
+ * {@link DeployerProfile} return type described fields that were undefined at runtime.
+ */
+export interface DeployerProfileResponse {
+  is_deployer: boolean;
+  /** Only on the `is_deployer: false` answer. */
+  wallet?: string;
+  deployer: DeployerProfileRow | null;
+  /** Aggregated from the live pump.fun API (not our DB); null when not a deployer. */
+  pump_stats: { total: number; bonded: number; bondingRate: number; bestAthMc: number; avgAthMc: number } | null;
+  /** Raw pump.fun API token list (pump.fun-launched tokens only). */
+  pump_tokens: Record<string, unknown>[];
+  /** true when the pump.fun API read failed (pump_tokens is then empty); null on the not-a-deployer answer. */
+  pump_error: boolean | null;
+  /** Our own LaunchLab/bonk + bags tokens for this deployer. */
+  launchpad_tokens: DeployerLaunchpadToken[];
+  /** PRO+ funding evidence; absent below PRO or when the feature is off. */
+  funding?: Record<string, unknown>;
+  funding_features?: Record<string, unknown>;
+  /** PRO+ capital intelligence; absent when disabled. */
+  capital_intelligence?: Record<string, unknown>;
+  _rid?: string;
+}
+
+/** @deprecated Not what GET /deployer-hunter/{wallet} returns — use {@link DeployerProfileResponse}. Kept for source compatibility. */
 export interface DeployerProfile {
   wallet: string;
   tier: DeployerTier;
@@ -1189,7 +1460,8 @@ export interface DeployerTokensResponse {
 export interface KolBuysSummary {
   count: number;
   total_sol: number;
-  kols: unknown[];
+  /** KOLs that bought. */
+  kols: string[];
 }
 
 export interface DeployerAlert {
@@ -1205,16 +1477,26 @@ export interface DeployerAlert {
   market_cap_at_alert?: number | null;
   /** Deployer wallet's SOL balance at alert time, in SOL. Null when unknown. */
   deployer_sol_balance?: number | null;
+  /** Launchpad the token was deployed on. */
+  launchpad?: string | null;
   deployers: DeployerSummary;
   kol_buys?: KolBuysSummary | null;
 }
 
-export interface DeployerAlertsResponse {
+export interface DeployerAlertsResponse extends FreeTierDelayMeta {
   alerts: DeployerAlert[];
   limit: number;
   offset: number;
-  /** Cursor for the next page — pass as `before` to fetch older alerts. */
+  /** LEGACY strict timestamp cursor — pass as `before`. Prefer `next_cursor`. */
   next_before?: string | null;
+  /** Pass as `cursor` for the next (older) page; null at the end. */
+  next_cursor?: string | null;
+  /** false only when the candidate feed is exhausted. */
+  has_more?: boolean;
+  /** false only if kol_buys could not be aggregated exactly (counts are then lower bounds). */
+  kol_buys_complete?: boolean;
+  /** Present with min_kol_buys. */
+  scan?: FeedScanInfo;
   data_age_seconds?: number | null;
   _rid?: string;
 }
@@ -2060,10 +2342,45 @@ export interface TokenLockNextUnlock {
  * ui (`amount`, `locked`, …), `*_usd` and `*_pct_of_supply` fields are null when
  * decimals / price are unknown.
  */
+/**
+ * Who runs the lock contract, and how sure the server is (server 2026-10-02).
+ * `verified` = a known provider deployment (Streamflow / Jupiter Lock / Bonfida,
+ * identified by program id); `compatible` = only the instruction/event shape
+ * matches a known provider (`compatible_with`), the operator is NOT identified;
+ * `unverified` = unknown program. `id` / `website_url` are null unless verified.
+ * `lock_url` is a per-lock page on the provider site, set ONLY where its
+ * format is proven — for the Solana providers it is always null (never guessed).
+ */
+export interface TokenLockProvider {
+  id: string | null;
+  name: string | null;
+  identity: "verified" | "compatible" | "unverified";
+  compatible_with: string | null;
+  website_url: string | null;
+  lock_url: string | null;
+}
+
+/** Independent on-chain evidence on Solana Explorer (server 2026-10-02). */
+export interface TokenLockExplorer {
+  lock_account_url: string | null;
+  creation_tx_url: string | null;
+}
+
+/** One Bonfida vesting tranche (`TokenLock.schedule`). */
+export interface TokenLockTranche {
+  release_at: string | null;
+  /** Base units as a decimal string. */
+  amount_raw: string;
+}
+
 export interface TokenLock {
   /** The contract account (Streamflow stream / Jupiter VestingEscrow / Bonfida vesting account). */
   lock_account: string;
   program: TokenLockProgram;
+  /** Server 2026-10-02 — who runs the locker and how sure we are; see {@link TokenLockProvider}. Absent on older servers. */
+  provider?: TokenLockProvider;
+  /** Server 2026-10-02 — Solana Explorer links for the lock account and the creation tx. */
+  explorer?: TokenLockExplorer;
   kind: TokenLockKind;
   status: TokenLockStatus;
   mint: string;
@@ -2075,6 +2392,9 @@ export interface TokenLock {
   amount_raw: string;
   amount: number | null;
   amount_usd: number | null;
+  /** Server 2026-10-02 — the token price behind every `*_usd` field (null when unknown, stale or phantom). */
+  price_usd?: number | null;
+  /** % of CURRENT supply; null when unknown or above 100.5 (supply changed since the deposit). */
   amount_pct_of_supply: number | null;
   /** Still locked right now (amount − unlocked-so-far); "0" unless active. */
   locked_raw: string;
@@ -2093,6 +2413,10 @@ export interface TokenLock {
   cliff_at: string | null;
   /** Fully unlocked at; null = perpetual / no schedule. */
   end_at: string | null;
+  /** Server 2026-10-02 — seconds until fully unlocked (>= 0); 0 once completed; null when perpetual or cancelled / closed. */
+  seconds_until_end?: number | null;
+  /** Server 2026-10-02 — seconds until `next_unlock.at` (>= 0); null without a next unlock. */
+  seconds_until_next_unlock?: number | null;
   period_seconds: number | null;
   /** period < 1h (per-second stream, e.g. Streamflow payroll). */
   continuous: boolean;
@@ -2102,6 +2426,8 @@ export interface TokenLock {
   cliff_amount: number | null;
   perpetual: boolean;
   next_unlock: TokenLockNextUnlock | null;
+  /** Bonfida vesting only: the tranche list (absent on other programs). */
+  schedule?: TokenLockTranche[];
   /** The locker can cancel — funds are locked against the RECIPIENT, not the locker (a weaker promise). */
   cancelable_by_sender: boolean | null;
   cancelable_by_recipient: boolean | null;
@@ -2178,8 +2504,10 @@ export interface TokenLocksResponse {
 export interface TokenLocksFeedParams {
   /** ISO date-time — only contracts created after this instant (use `pagination.next_since`). */
   since?: string;
-  /** ISO date-time — page back: only contracts created before this instant (`pagination.next_before`). */
+  /** ISO date-time — page back: only contracts created before this instant (`pagination.next_before`). Legacy and strict: skips same-timestamp siblings — prefer `cursor`. */
   before?: string;
+  /** Opaque `pagination.next_cursor` from the previous page: strict (created_at, id) keyset, no repeats, no skips. Not combinable with `before`. */
+  cursor?: string;
   mint?: string;
   sender?: string;
   recipient?: string;
@@ -2205,6 +2533,13 @@ export interface TokenFeedPagination {
   next_since: string | null;
   /** Pass as `before` to page back. */
   next_before: string | null;
+  /** Locks feed — pass as `cursor` to page back without skipping same-timestamp rows; null = end. */
+  next_cursor?: string | null;
+  /** Present when a post-filter (min_usd / min_pct_of_supply / status) was scanned. */
+  post_filtered?: boolean;
+  scanned?: number;
+  scan_truncated?: boolean;
+  scan_budget?: number;
 }
 
 /** WebSocket pointer returned by the feed endpoints — the same rows are pushed live on `channel`. */
@@ -2220,6 +2555,8 @@ export interface TokenFeedStreamPointer {
 export interface TokenLocksFeedResponse {
   locks: TokenLockFeedEntry[];
   pagination: TokenFeedPagination;
+  /** "mint_facts:<table>" when a per-mint enrichment read failed; those rows' usd/ui/pct are null (unknown) and min_usd / min_pct_of_supply could not be applied to them. */
+  degraded_fields?: string[];
   /** Pointer to the `token:locks` WS channel (event `token:lock`). */
   stream: TokenFeedStreamPointer;
   meta?: Record<string, unknown>;
@@ -3064,8 +3401,10 @@ export interface TokenSurgeStreamEvent {
   bonding_progress_pct: number | null;
   is_bonded: boolean | null;
   tape: TokenSurgeTape;
-  kol: TokenSurgeKol;
-  early_buyers: TokenSurgeEarlyBuyers;
+  /** null when the enrichment round-trip failed (`enrichment_available: false`). */
+  kol: TokenSurgeKol | null;
+  /** null when the enrichment round-trip failed (`enrichment_available: false`). */
+  early_buyers: TokenSurgeEarlyBuyers | null;
   deployer: TokenSurgeDeployer | null;
   /** Flat copies of `deployer.wallet` / `deployer.tier` (what the subscribe filter reads). */
   deployer_wallet: string | null;
@@ -3390,6 +3729,29 @@ export interface TradeCoverage {
   /** Present when `in_scope` is `false`/`null` (and always on `/risk`) —
    * human-readable explanation of what the coverage gap means. */
   note?: string;
+  /** Same value as in_scope: persisted rows exist (presence, not completeness). */
+  data_observed?: boolean | null;
+  /** Does the CURRENT capture gate admit this mint? */
+  eligibility?: TradeEligibility | null;
+  eligibility_basis?: string | null;
+  /** Always "not_verified": rows existing never proves a complete interval. */
+  completeness?: "not_verified";
+  /** Persistence size floor of the stored trade tape (server 2026-09-30). */
+  size_floor?: TradeSizeFloor;
+}
+
+/** Treat unknown future values as "unknown". */
+export type TradeEligibility = "eligible" | "lapsed" | "excluded" | "unknown" | "admitted_previously" | "not_applicable";
+
+/**
+ * The stored trade tape drops buys under `min_sol` SOL (under `min_stable_usd`
+ * when paid in USDC/USDT); sells that RECEIVE SOL are kept at any size. Live
+ * streams, prices, market caps and candles are not subject to it.
+ */
+export interface TradeSizeFloor {
+  min_sol: number;
+  min_stable_usd: number;
+  applies_to: string;
 }
 
 /** Back-compat alias — the honesty block is no longer trades-specific. */
@@ -3720,6 +4082,19 @@ export interface WalletStatsResponse {
   /** v2.22.4 — trade-coverage disclosure; when `in_scope` is false an empty
    * `stats` block means "outside the write-gate", not "never traded". */
   coverage?: TradeCoverage;
+  /**
+   * Server 2026-10-01 — present (`true`) only when the 90-day aggregation
+   * failed: `stats: null` is then UNKNOWN, not an inactive wallet.
+   */
+  stats_unavailable?: boolean;
+  /** Present (`true`) only when one or more enrichment queries failed; see `degraded_fields`. */
+  enrichment_unavailable?: boolean;
+  /**
+   * Enrichment blocks whose query failed (e.g. a database timeout). Their
+   * `null` / `[]` is UNKNOWN, not "no data"; retry later. `biggest_miss`
+   * refers to `derived.biggest_miss`.
+   */
+  degraded_fields?: Array<"top_tokens" | "trading_style" | "deployer_breakdown" | "recent_trades" | "biggest_miss" | (string & {})>;
   _rid?: string;
 }
 
@@ -4159,7 +4534,7 @@ export interface AlmostBondedResponse {
 
 // ─── /me types — v1.7 ────────────────────────────────────────────────────────
 
-export type ApiTier = "BASIC" | "TRADER" | "PRO" | "ULTRA";
+export type ApiTier = "BASIC" | "TRADER" | "PRO" | "ULTRA" | "BUSINESS" | "ENTERPRISE";
 
 export interface MeQuotaWindow {
   limit: number;
@@ -4218,11 +4593,16 @@ export interface WalletEntry {
   added_at: string;
 }
 
+/** POST /wallet-tracker/watchlist (201) — the inserted row under `wallet`. */
 export interface WatchlistAddResponse {
-  wallet_address: string;
-  label: string | null;
-  added_at: string;
-  remaining: number;
+  wallet: WalletEntry;
+  _rid?: string;
+}
+
+/** PATCH /wallet-tracker/watchlist/{address} — the updated row under `wallet`. */
+export interface WatchlistUpdateResponse {
+  wallet: WalletEntry;
+  _rid?: string;
 }
 
 export interface WatchlistResponse {
@@ -4296,8 +4676,10 @@ export interface WalletTrackerSummaryResponse {
   period: string;
 }
 
+/** DELETE /wallet-tracker/watchlist/{address} — echoes the removed address. */
 export interface WalletTrackerDeleteResponse {
-  success: boolean;
+  removed: string;
+  _rid?: string;
 }
 
 // ─── Tools types ─────────────────────────────────────────────────────────────
@@ -4379,26 +4761,81 @@ export interface StreamSessionEvictResponse {
 
 // ─── Webhook types ──────────────────────────────────────────────────────────
 
+/** Event types a webhook can subscribe to (`VALID_EVENTS`). Every event is PRO+. */
+export type WebhookEvent =
+  | "kol:trade"
+  | "kol:coordination"
+  | "deployer:alert"
+  | "deployer:bond"
+  | "wallet_tracker:event"
+  | "sniper:deploy"
+  | "rhc:kol_trade"
+  | "token:surge"
+  | "token:revival";
+
+export type WebhookConditionOp = "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "in" | "contains";
+
+/** Custom filter condition — ULTRA/BUSINESS only (PRO gets 403). Max 10 per webhook. */
+export interface WebhookCondition {
+  field: string;
+  op: WebhookConditionOp;
+  value: string | number | boolean | Array<string | number>;
+}
+
+/** Delivery filters. Named filters are validated against the subscribed `events` (400 when one does not apply). */
+export interface WebhookFilters {
+  min_sol?: number;
+  action?: "buy" | "sell";
+  kol_name?: string;
+  deployer_tier?: string[];
+  min_kols?: number;
+  /** token:surge / token:revival */
+  kinds?: Array<"surge" | "revival">;
+  tiers?: Array<"early" | "strong" | "breakout">;
+  launchpads?: string[];
+  exclude_flags?: string[];
+  min_mc_usd?: number;
+  max_mc_usd?: number;
+  /** ULTRA/BUSINESS only. */
+  conditions?: WebhookCondition[];
+}
+
 export interface WebhookCreateParams {
+  /** Must be https://. */
   url: string;
-  events: string[];
-  filters?: Record<string, unknown>;
+  events: WebhookEvent[];
+  filters?: WebhookFilters;
 }
 
 export interface WebhookUpdateParams {
   url?: string;
-  events?: string[];
-  filters?: Record<string, unknown>;
-  status?: "active" | "paused";
+  events?: WebhookEvent[];
+  filters?: WebhookFilters;
+  /** Pause (false) or resume (true). Resuming resets `consecutive_failures`. */
+  is_active?: boolean;
+}
+
+export interface WebhookDeliverySummary {
+  total_24h: number;
+  success_24h: number;
+  failed_24h: number;
+  /** Percent, one decimal; 100 when there were no deliveries. */
+  success_rate: number;
 }
 
 export interface Webhook {
   id: number;
   url: string;
-  events: string[];
-  filters: Record<string, unknown> | null;
-  status: string;
+  events: WebhookEvent[];
+  filters: WebhookFilters | null;
+  is_active: boolean;
   created_at: string;
+  /** On list / get. */
+  last_delivered_at?: string | null;
+  /** On list / get. */
+  consecutive_failures?: number;
+  /** On list only. */
+  delivery_summary?: WebhookDeliverySummary;
 }
 
 export interface WebhookListResponse {
@@ -4406,8 +4843,49 @@ export interface WebhookListResponse {
   _rid?: string;
 }
 
+/** POST /webhooks (201) — the only response that carries `secret`. */
+export interface WebhookCreateResponse {
+  webhook: Webhook & { secret: string };
+  note: string;
+  _rid?: string;
+}
+
+export interface WebhookDelivery {
+  event_type: string;
+  status_code: number | null;
+  response_time_ms: number | null;
+  delivered_at: string;
+  error: string | null;
+}
+
+/** GET /webhooks/{id} */
+export interface WebhookGetResponse {
+  webhook: Webhook;
+  recent_deliveries: WebhookDelivery[];
+  _rid?: string;
+}
+
+/** PATCH /webhooks/{id} */
+export interface WebhookUpdateResponse {
+  webhook: Pick<Webhook, "id" | "url" | "events" | "filters" | "is_active"> & { updated_at: string };
+  _rid?: string;
+}
+
 export interface WebhookDeleteResponse {
+  deleted: boolean;
+  _rid?: string;
+}
+
+/** POST /webhooks/test */
+export interface WebhookTestResponse {
   success: boolean;
+  status_code?: number | null;
+  response_time_ms: number;
+  /** The event type that was sampled. */
+  event?: string;
+  /** Present when the delivery failed. */
+  error?: string;
+  _rid?: string;
 }
 
 // ─── Client config ────────────────────────────────────────────────────────────
@@ -4911,6 +5389,18 @@ class TokenClient {
   }
 
   /**
+   * The wallets that made (or lost) the most on a token, ranked by realized
+   * PnL or ROI, each enriched with KOL identity and alpha-wallet reputation
+   * (`bot_confidence`, historical win rate / PnL). `limit` PRO <= 25 /
+   * ULTRA <= 100; `sort` "pnl" (default) | "roi"; `window_days` 1-180
+   * (default 90); `min_bought_sol` default 0.1. PRO+.
+   * `GET /tokens/{mint}/top-traders`
+   */
+  topTraders(mint: string, params?: TokenTopTradersParams): Promise<TokenTopTradersResponse> {
+    return this._fetch(buildUrl(this._baseUrl, `/tokens/${encodeURIComponent(mint)}/top-traders`, params as Record<string, string | number | undefined>));
+  }
+
+  /**
    * v2.25 — Token locks & vesting on a mint (`GET /tokens/{mint}/locks`): every
    * on-chain Streamflow stream, Jupiter Lock vesting escrow and Bonfida
    * token-vesting contract, decoded from the locker programs' account state.
@@ -5123,7 +5613,7 @@ class DeployerClient {
    * Full profile for a single deployer wallet.
    * @param wallet Solana wallet address.
    */
-  profile(wallet: string): Promise<DeployerProfile> {
+  profile(wallet: string): Promise<DeployerProfileResponse> {
     return this._fetch(buildUrl(this._baseUrl, `/deployer-hunter/${encodeURIComponent(wallet)}`));
   }
 
@@ -5270,7 +5760,7 @@ class WalletTrackerClient {
    * @param address Solana wallet address.
    * @param params label (string to set, null to clear).
    */
-  updateLabel(address: string, params: WatchlistUpdateParams): Promise<WalletEntry> {
+  updateLabel(address: string, params: WatchlistUpdateParams): Promise<WatchlistUpdateResponse> {
     return this._patch(buildUrl(this._baseUrl, `/wallet-tracker/watchlist/${encodeURIComponent(address)}`), params);
   }
 
@@ -5735,9 +6225,28 @@ export interface CopyTradeSubscription {
   sizing_amount: number;
   delivery_mode: CopyTradeDeliveryMode;
   webhook_url: string | null;
+  /** Market-cap band (USD) on the source trade; `null` = no bound. */
+  min_mc_usd?: number | null;
+  max_mc_usd?: number | null;
   is_active: boolean;
   created_at: string;
   updated_at?: string;
+  /**
+   * Source wallets that are tracked KOL wallets (can produce signals), read at
+   * response time. `null` when the tracking lookup failed (see `warnings`).
+   * Server 2026-09-25 on; absent on older ones.
+   */
+  source_wallets_tracked?: string[] | null;
+  /** Source wallets that are NOT tracked KOL wallets: they never produce a signal. */
+  source_wallets_untracked?: string[] | null;
+  /** Present when at least one wallet is untracked, or tracking could not be determined. */
+  warnings?: CopyTradeRuleWarning[];
+}
+
+/** A non-fatal note on a copy-trade rule. The rule is saved unchanged. */
+export interface CopyTradeRuleWarning {
+  code: "untracked_source_wallets" | "source_wallet_tracking_unavailable" | (string & {});
+  message: string;
 }
 
 export interface CopyTradeCreateParams {
@@ -5749,6 +6258,9 @@ export interface CopyTradeCreateParams {
   sizing_amount: number;
   delivery_mode?: CopyTradeDeliveryMode;
   webhook_url?: string;
+  /** Market-cap band (USD, 0 to 1e12, min <= max) on the source trade's MC at trade time. When either bound is set, trades with an unknown MC are dropped. */
+  min_mc_usd?: number | null;
+  max_mc_usd?: number | null;
 }
 
 export interface CopyTradeUpdateParams {
@@ -5761,6 +6273,9 @@ export interface CopyTradeUpdateParams {
   delivery_mode?: CopyTradeDeliveryMode;
   webhook_url?: string | null;
   is_active?: boolean;
+  /** Pass `null` to clear an MC bound. */
+  min_mc_usd?: number | null;
+  max_mc_usd?: number | null;
 }
 
 export interface CopyTradeCreateResponse {
@@ -5768,6 +6283,8 @@ export interface CopyTradeCreateResponse {
   /** Returned ONCE on creation when `webhook_url` is set — store it to verify HMAC signatures. */
   webhook_secret: string | null;
   note?: string;
+  /** Same as `subscription.warnings`, repeated at top level when present. */
+  warnings?: CopyTradeRuleWarning[];
 }
 
 export interface CopyTradeSignal {
@@ -5938,12 +6455,17 @@ class WebhookClient {
   }
 
   /** Create a new webhook. */
-  create(params: WebhookCreateParams): Promise<Webhook> {
+  create(params: WebhookCreateParams): Promise<WebhookCreateResponse> {
     return this._post(buildUrl(this._baseUrl, "/webhooks"), params);
   }
 
+  /** One webhook plus its most recent deliveries. */
+  get(id: number): Promise<WebhookGetResponse> {
+    return this._get(buildUrl(this._baseUrl, `/webhooks/${id}`));
+  }
+
   /** Update a webhook. */
-  update(id: number, params: WebhookUpdateParams): Promise<Webhook> {
+  update(id: number, params: WebhookUpdateParams): Promise<WebhookUpdateResponse> {
     return this._patch(buildUrl(this._baseUrl, `/webhooks/${id}`), params);
   }
 
@@ -5953,8 +6475,8 @@ class WebhookClient {
   }
 
   /** Send a test payload to a webhook. */
-  test(webhookId: number): Promise<unknown> {
-    return this._post(buildUrl(this._baseUrl, "/webhooks/test"), { webhook_id: webhookId });
+  test(webhookId: number, event?: WebhookEvent): Promise<WebhookTestResponse> {
+    return this._post(buildUrl(this._baseUrl, "/webhooks/test"), event ? { webhook_id: webhookId, event } : { webhook_id: webhookId });
   }
 }
 
