@@ -285,23 +285,100 @@ export interface KolLeaderboardResponse {
   _rid?: string;
 }
 
+/** One row of `pnl_by_token` on `GET /kol/{wallet}` (only with `include: "pnl_by_token"`). SOL figures. */
 export interface KolPnlByToken {
-  mint: string;
-  token_name: string | null;
+  token_mint: string;
   token_symbol: string | null;
-  realized_pnl_usd: number;
+  token_name: string | null;
   buy_count: number;
   sell_count: number;
+  /** SOL spent buying this token. */
+  total_bought: number;
+  /** SOL received selling this token. */
+  total_sold: number;
+  /** total_sold − total_bought, SOL. */
+  pnl: number;
+  result: "open" | "win" | "loss";
+  first_trade: string;
+  last_trade: string;
+  /** @deprecated Never sent by the API — use `token_mint`. */
+  mint?: string;
+  /** @deprecated Never sent by the API — use `pnl` (SOL). */
+  realized_pnl_usd?: number;
 }
 
+/** `recent_winners` / `recent_losers` row on `GET /kol/{wallet}`. */
+export interface KolWalletClosedToken {
+  token_mint: string;
+  token_symbol: string | null;
+  token_name: string | null;
+  pnl: number;
+  roi_pct: number | null;
+  buy_count: number;
+  sell_count: number;
+  first_trade: string;
+  last_trade: string;
+}
+
+/** `GET /kol/{wallet}` — what `client.kol.wallet()` returns. */
 export interface KolWalletProfile {
-  wallet: string;
-  kol_name: string | null;
-  kol_twitter: string | null;
-  total_pnl_usd: number;
-  win_rate: number;
-  trade_count: number;
+  kol: { name: string; wallet: string; twitter_url: string | null; strategy_tag: string | null; auto_strategy_tag: string | null };
+  /** Sums over the returned trades only (not full history). `win_rate` (0–100) only when per-token PnL was computed. */
+  stats: { pnl: number; buy_count: number; sell_count: number; volume: number; win_rate?: number };
+  scores: {
+    winrate_7d: number | null;
+    winrate_30d: number | null;
+    avg_roi_7d: number | null;
+    avg_roi_30d: number | null;
+    profit_factor_7d: number | null;
+    profit_factor_30d: number | null;
+    pnl_7d: number | null;
+    pnl_30d: number | null;
+    early_entry_pct_30d: number | null;
+    consistency_7d: number | null;
+    median_hold_minutes_30d: number | null;
+    closed_positions_7d: number;
+    closed_positions_30d: number;
+    is_heating_up: boolean;
+    is_cold: boolean;
+  };
+  /** Percentile vs the other tracked KOLs; null when not ranked. */
+  peer_ranks: {
+    percentile_pnl_7d: number | null;
+    percentile_winrate_7d: number | null;
+    percentile_pnl_30d: number | null;
+    percentile_winrate_30d: number | null;
+    percentile_early_entry_30d: number | null;
+  };
+  /** Up to 100 most recent trades. */
+  recent_trades: {
+    token_mint: string;
+    token_name: string | null;
+    token_symbol: string | null;
+    action: KolAction;
+    sol_amount: number;
+    token_amount: number;
+    market_cap_usd_at_trade: number | null;
+    price_usd_at_trade: number | null;
+    tx_signature: string;
+    traded_at: string;
+  }[];
   pnl_by_token?: KolPnlByToken[];
+  recent_winners?: KolWalletClosedToken[];
+  recent_losers?: KolWalletClosedToken[];
+  _rid?: string;
+  /** @deprecated Never sent by the API — use `kol.wallet`. */
+  wallet?: string;
+  /** @deprecated Never sent by the API — use `kol.name`. */
+  kol_name?: string | null;
+  /** @deprecated Never sent by the API — use `kol.twitter_url`. */
+  kol_twitter?: string | null;
+  /** @deprecated Never sent by the API — use `stats.pnl` (SOL). */
+  total_pnl_usd?: number;
+  /** @deprecated Never sent by the API — use `stats.win_rate`. */
+  win_rate?: number;
+  /** @deprecated Never sent by the API — use `stats.buy_count + stats.sell_count`. */
+  trade_count?: number;
 }
 
 export interface CoordinationKol {
@@ -554,6 +631,28 @@ export interface ScoutLeaderboardParams {
   sort?: ScoutLeaderboardSort;
 }
 
+/** One row of `GET /kol/scouts/leaderboard`. */
+export interface ScoutLeaderboardEntry {
+  wallet: string;
+  name: string | null;
+  avatar_url: string | null;
+  twitter_url: string | null;
+  scout_tier: ScoutTier | null;
+  first_touches_30d: number | null;
+  avg_followers_4h: number | null;
+  /** % of first touches that drew ≥3 other KOLs within 4h. */
+  swarm_3plus_pct: number | null;
+  /** % of first touches that drew ≥5 other KOLs within 4h. */
+  swarm_5plus_pct: number | null;
+  computed_at: string;
+}
+
+export interface ScoutLeaderboardResponse {
+  scouts: ScoutLeaderboardEntry[];
+  count: number;
+  _rid?: string;
+}
+
 // ─── KOL consensus (v1.9) ──────────────────────────────────────────────────
 
 /**
@@ -701,6 +800,26 @@ export interface CoordinationHistoryParams {
   limit?: number;
   since?: string;
   min_score?: number;
+}
+
+/** One past coordination cluster (deduped per token) on `GET /kol/coordination/history`. */
+export interface CoordinationHistoryEvent {
+  token_mint: string;
+  /** Most recent fire time for this token. */
+  fired_at: string;
+  /** Highest score observed across the token's fires. */
+  coordination_score: number;
+  total_fires: number;
+  /** Distinct KOL wallets that bought the token. */
+  kol_buyers: number;
+  current_mc_usd: number | null;
+  current_price_usd: number | null;
+}
+
+export interface CoordinationHistoryResponse {
+  events: CoordinationHistoryEvent[];
+  count: number;
+  _rid?: string;
 }
 
 // ─── First-touch signal ─────────────────────────────────────────────────────
@@ -1014,6 +1133,11 @@ export interface KolOpenPosition {
   token_name: string;
   buy_count: number;
   bought_sol: number;
+  /** Current value of the remaining position, SOL (0 when unpriced — check `is_priced`). */
+  held_value_sol?: number;
+  unrealized_pnl_sol?: number;
+  /** false = no live price for this token, so held_value_sol / unrealized_pnl_sol are not a valuation. */
+  is_priced?: boolean;
   first_buy_at: string;
 }
 
@@ -1059,16 +1183,52 @@ export interface KolTrendingResponse {
   _rid?: string;
 }
 
-export interface KolTokenActivity {
-  mint: string;
-  token_name: string | null;
-  token_symbol: string | null;
-  kol_buyers: string[];
-  kol_sellers: string[];
+/** One KOL on `GET /kol/tokens/{mint}` (up to 50, by net flow). SOL figures. */
+export interface KolTokenKol {
+  name: string;
+  wallet: string;
   buy_count: number;
   sell_count: number;
-  total_sol_volume: number;
-  recent_trades: KolTrade[];
+  /** SOL this KOL spent buying the token. */
+  total_bought: number;
+  /** SOL this KOL received selling the token. */
+  total_sold: number;
+  net_sol: number;
+  position: "net_buyer" | "net_seller" | "neutral";
+  first_trade: string;
+  last_trade: string;
+}
+
+/** `GET /kol/tokens/{mint}` — what `client.kol.token()` returns. */
+export interface KolTokenActivity extends FreeTierDelayMeta {
+  token_mint: string;
+  summary: {
+    kol_count: number;
+    total_bought_sol: number;
+    total_sold_sol: number;
+    net_flow_sol: number;
+    signal: "accumulating" | "distributing";
+  };
+  kols: KolTokenKol[];
+  _rid?: string;
+  /** @deprecated Never sent by the API — use `token_mint`. */
+  mint?: string;
+  /** @deprecated Never sent by the API. */
+  token_name?: string | null;
+  /** @deprecated Never sent by the API. */
+  token_symbol?: string | null;
+  /** @deprecated Never sent by the API — use `kols`. */
+  kol_buyers?: string[];
+  /** @deprecated Never sent by the API — use `kols`. */
+  kol_sellers?: string[];
+  /** @deprecated Never sent by the API. */
+  buy_count?: number;
+  /** @deprecated Never sent by the API. */
+  sell_count?: number;
+  /** @deprecated Never sent by the API — use `summary`. */
+  total_sol_volume?: number;
+  /** @deprecated Never sent by the API. */
+  recent_trades?: KolTrade[];
 }
 
 // ─── KOL entry-order ─────────────────────────────────────────────────────────
@@ -1156,6 +1316,8 @@ export interface KolCompareResponse {
   profiles: KolCompareProfile[];
   /** Tokens bought by 2+ of the provided wallets in the last 30d (PRO+ only). */
   overlap?: KolCompareOverlapToken[];
+  /** `overlap` is the top 25 of `total` qualifying tokens over the full 30 d window; `total: null` = the aggregate failed (unknown, not 0). */
+  overlap_meta?: { window_start: string; min_wallets: number; total: number | null; returned: number; has_more: boolean | null; complete: boolean };
 }
 
 // ─── KOL alerts ──────────────────────────────────────────────────────────────
@@ -1298,6 +1460,14 @@ export interface DeployerStats {
   bonds_detected: number;
   bond_rate: number;
   tiers: DeployerTierCounts;
+  /** Average market cap (USD) at alert time per tier, last 30 d. Values are null (unknown, never 0) when `mc_at_alert_complete` is false. */
+  avg_mc_at_alert_usd_30d?: { elite: number | null; good: number | null; rising: number | null } | null;
+  /** Alerts behind each average (every alert in the 30 d window). null when the aggregate failed. */
+  mc_at_alert_samples_30d?: { elite: number | null; good: number | null; rising: number | null } | null;
+  mc_at_alert_window_start?: string;
+  /** false = the per-tier MC aggregate failed; the two maps above are unknown. */
+  mc_at_alert_complete?: boolean;
+  coverage?: TradeCoverage;
   _rid?: string;
 }
 
@@ -1378,6 +1548,47 @@ export interface DeployerLaunchpadToken {
   peak_market_cap: number | null;
 }
 
+/**
+ * One entry of `pump_tokens` on `GET /deployer-hunter/{wallet}` — passed through
+ * from the live pump.fun API, so every field is optional and the object may carry
+ * more keys than listed here.
+ */
+export interface DeployerPumpToken {
+  mint?: string;
+  name?: string;
+  symbol?: string;
+  image_uri?: string;
+  creator?: string;
+  /** Unix ms. */
+  created_timestamp?: number;
+  /** Bonded / graduated. */
+  complete?: boolean;
+  ath_market_cap?: number;
+  usd_market_cap?: number;
+  market_cap?: number;
+  reply_count?: number;
+  pool_address?: string;
+  pump_swap_pool?: string;
+  [key: string]: unknown;
+}
+
+/** One token row of `GET /deployer-hunter/{wallet}/tokens`. */
+export interface DeployerTokenRow {
+  id: string;
+  token_mint: string;
+  token_name: string | null;
+  token_symbol: string | null;
+  deployed_at: string;
+  bonded_at: string | null;
+  time_to_bond_minutes: number | null;
+  peak_market_cap: number | null;
+  mc_at_bond: number | null;
+  market_cap_at_alert: number | null;
+  alerted_at: string | null;
+  /** create → migrate within ~90 s (curve filled by a bundle). */
+  instant_bond: boolean;
+}
+
 /** The `deployers` row inside {@link DeployerProfileResponse}. */
 export interface DeployerProfileRow {
   id: string;
@@ -1420,7 +1631,7 @@ export interface DeployerProfileResponse {
   /** Aggregated from the live pump.fun API (not our DB); null when not a deployer. */
   pump_stats: { total: number; bonded: number; bondingRate: number; bestAthMc: number; avgAthMc: number } | null;
   /** Raw pump.fun API token list (pump.fun-launched tokens only). */
-  pump_tokens: Record<string, unknown>[];
+  pump_tokens: DeployerPumpToken[];
   /** true when the pump.fun API read failed (pump_tokens is then empty); null on the not-a-deployer answer. */
   pump_error: boolean | null;
   /** Our own LaunchLab/bonk + bags tokens for this deployer. */
@@ -1451,10 +1662,20 @@ export interface DeployerProfile {
   tokens?: DeployerToken[] | null;
 }
 
+/** `GET /deployer-hunter/{wallet}/tokens` — what `client.deployer.tokens()` returns. */
 export interface DeployerTokensResponse {
-  tokens: DeployerToken[];
-  count: number;
+  tokens: DeployerTokenRow[];
   total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+  /** Only on the untracked-wallet answer (`is_deployer: false`, empty `tokens`). */
+  is_deployer?: boolean;
+  wallet?: string;
+  coverage?: TradeCoverage;
+  _rid?: string;
+  /** @deprecated Never sent by the API — use `tokens.length`. */
+  count?: number;
 }
 
 export interface KolBuysSummary {
@@ -1530,6 +1751,10 @@ export interface DeployerAlertStats {
   multiplier: MultiplierStats;
   tiers: Record<string, TierStats>;
   period: string;
+  /** Rows the multiplier/tier aggregates were computed over. */
+  sampled_rows?: number;
+  /** true = the population exceeded the internal row cap; the aggregates are a sample. */
+  truncated?: boolean;
   _rid?: string;
 }
 
@@ -1567,6 +1792,8 @@ export interface RecentBond {
   time_to_bond_minutes?: number | null;
   peak_market_cap?: number | null;
   mc_at_bond?: number | null;
+  /** create → migrate within ~90 s (curve filled by a bundle). */
+  instant_bond?: boolean;
   deployers: DeployerSummary;
 }
 
@@ -1847,13 +2074,24 @@ export interface AlphaWalletResponse {
 export interface AlphaLinkedWallet {
   wallet_address: string;
   shared_tokens: number;
+  /** Average seconds between the two wallets' trades on shared tokens. */
+  avg_time_diff_secs: number;
+  /** Average SOL-size difference between paired trades. */
+  avg_sol_diff: number;
   similarity_score: number;
 }
 
+/** `GET /alpha/{wallet}/linked`. */
 export interface AlphaLinkedResponse {
   wallet: string;
-  linked_wallets: AlphaLinkedWallet[];
-  total: number;
+  /** Most similar co-trading wallets. */
+  linked: AlphaLinkedWallet[];
+  coverage?: TradeCoverage;
+  _rid?: string;
+  /** @deprecated Never sent by the API — the list is `linked`. */
+  linked_wallets?: AlphaLinkedWallet[];
+  /** @deprecated Never sent by the API — use `linked.length`. */
+  total?: number;
 }
 
 export interface AlphaCapTableBuyer {
@@ -1917,6 +2155,23 @@ export interface AlphaBuyerQualityResponse {
   cached_at: string;
   /** Returned on all tiers. */
   breakdown?: AlphaBuyerQualityBreakdown;
+  /** Present only when breakdown.dump_cluster_count ≥ 1 and the daily signal-performance snapshot has a bucket for it. */
+  signal_stats?: {
+    dump_cluster_count: {
+      value: number;
+      /** "k>=1" | "k>=3" | "k>=5" */
+      bucket: string;
+      /** "dump" | "runner" */
+      outcome: string;
+      hit_rate: number;
+      base_rate: number;
+      lift: number;
+      sample_n: number;
+      window_days: number;
+      as_of: string;
+      summary: string;
+    };
+  };
   note?: string;
   /** v2.22.4 — trade-coverage disclosure (additive; absent on older cached responses). */
   coverage?: TradeCoverage;
@@ -2036,14 +2291,23 @@ export interface TokenRiskResponse {
    * names the split: trade-derived sub-fields are launchpad-pipeline scoped,
    * on-chain sub-fields are unaffected by trade coverage. */
   coverage?: TradeCoverage;
+  /** Deploy-row lookup status behind `dev`: ok | not_found (no deploy row) | unavailable (lookup failed — `dev` is unknown, not absent). */
+  dev_status?: "ok" | "not_found" | "unavailable";
+  /** Single-mint `/risk` only: present when you passed a POOL address and the answer is for its token mint. */
+  resolved_from?: { address: string; kind: "pool"; dex: string; source: string };
 }
 
 /** Per-mint error entry in a batch-risk response. Untracked mints come back as
- * `"not_tracked"`; a per-mint scoring failure comes back as `"error"`. Neither
- * fails the batch. */
+ * `"not_tracked"`; a per-mint scoring failure comes back as `"error"`;
+ * `"unavailable"` = a score-critical input could not be read (retry — never a
+ * partial score). None of them fails the batch. */
 export interface TokenRiskBatchError {
   mint: string;
-  error: "not_tracked" | "error";
+  error: "not_tracked" | "error" | "unavailable";
+  code?: "risk_inputs_unavailable";
+  /** Which score-critical inputs could not be read (with `error: "unavailable"`). */
+  unavailable_inputs?: string[];
+  retryable?: boolean;
 }
 
 /** One entry in `TokenRiskBatchResponse.tokens` — either a full risk result
@@ -3626,6 +3890,15 @@ export interface CandlesResponse {
   /** True on ULTRA keys — the net-flow / liquidity fields are populated. */
   net_flow_included: boolean;
   candles: Candle[];
+  /** true = the page budget ran out before `limit` candles or `from` was reached; `covered_from` is then the oldest instant actually searched. */
+  truncated?: boolean;
+  covered_from?: string;
+  /** Oldest instant your plan may read (PRO: 30 days); null = no plan floor. */
+  history_floor?: string | null;
+  /** true = `from` was moved forward to `history_floor`. */
+  history_clamped?: boolean;
+  /** true = the whole requested window is older than the plan floor (200 with no candles). */
+  history_outside_plan?: boolean;
 }
 
 export type TokenFlowWindow = "1h" | "24h";
@@ -4182,6 +4455,12 @@ export interface WalletPnlResponse {
   computed_at?: string;
   /** Only present on cache misses — TTL for this row in wallet_analyses. */
   ttl_seconds?: number;
+  /** Seconds since `computed_at` (source age survives a cache hit). */
+  cache_age_seconds?: number;
+  /** Cache hits: head_checked (no newer trade) | unverified (the check failed). */
+  cache_validation?: "head_checked" | "unverified";
+  /** A cache row existed but the wallet traded since; this response was recomputed. */
+  cache_invalidated?: "new_activity";
   /** v2.22.4 — trade-coverage disclosure; `in_scope: false` means the PnL is
    * built from zero covered trades, not that the wallet never traded. */
   coverage?: TradeCoverage;
@@ -4194,6 +4473,12 @@ export interface WalletPositionsResponse {
   cache_hit?: boolean;
   computed_at?: string | null;
   ttl_seconds?: number | null;
+  /** Seconds since `computed_at` (source age survives a cache hit). */
+  cache_age_seconds?: number;
+  /** Cache hits: head_checked (no newer trade) | unverified (the check failed). */
+  cache_validation?: "head_checked" | "unverified";
+  /** A cache row existed but the wallet traded since; this response was recomputed. */
+  cache_invalidated?: "new_activity";
   /** v2.22.4 — trade-coverage disclosure (additive). */
   coverage?: TradeCoverage;
   _rid?: string;
@@ -4376,16 +4661,65 @@ export interface TokenResponseBody {
   launch_cohort_sol?: number | null;
   /** Count of distinct first-20 buyers (0–20). */
   launch_cohort_size?: number;
+  /** Volume-weighted price over recent trades; null when there are none. */
+  vwap_price_usd?: number | null;
+  vwap_price_sol?: number | null;
+  /** Address of the pool the headline price comes from; null when unknown. */
+  primary_pool_address?: string | null;
+  /** Which writer produced the selected price; null when there is no price. */
+  price_source?: "mc_tracker" | "dex_stream" | null;
+  /** Observation time of the selected price (the price-age anchor — not `last_trade_at`). */
+  price_observed_at?: string | null;
+  /** null = a price exists but its age is unknown (never a false "fresh"). */
+  price_is_stale?: boolean | null;
+  price_age_seconds?: number | null;
+  /** Why `deployer` is null: unknown creator vs a failed lookup. */
+  deployer_identity?: {
+    identity_status: "resolved" | "unknown" | "lookup_failed";
+    history_status: DeployerHistoryStatus | null;
+    address: string | null;
+    source: "deployer_tokens" | "pending_deploys" | null;
+  };
+  /** A token-SUPPLY burn was observed (mint supply decreased) — not LP evidence. null = unknown. */
+  token_supply_burn_detected?: boolean | null;
+  /** LP-burn evidence. Only "verified" means the LP was proven burnt. */
+  lp_burn_status?: LpBurnStatus;
+}
+
+/** LP-burn evidence: only "verified" means proven; "unknown" is the honest default. */
+export type LpBurnStatus = "verified" | "not_verified" | "unknown";
+/** Creator-history label on `deployer_identity`. "unranked" tier is NOT "new". */
+export type DeployerHistoryStatus = "new_in_our_index" | "limited_history" | "reputation_pending" | "established";
+
+/** Includes accepted by `client.token.get(mint, { include })`. */
+export type TokenInclude = "buyer_quality" | "deployer";
+
+export interface TokenGetParams {
+  /** Comma-separated or array: `buyer_quality` embeds the `/tokens/{mint}/buyer-quality` body, `deployer` embeds `/deployer-hunter/{deployer}` as `deployer_profile`. One call; each include keeps its own tier gate. */
+  include?: TokenInclude | TokenInclude[] | string;
 }
 
 export interface TokenResponse {
   token: TokenResponseBody;
+  /** Response assembly time; NOT the observation time of any field. */
+  as_of?: string;
+  /** Present with `include: "buyer_quality"` — the `/tokens/{mint}/buyer-quality` body. */
+  buyer_quality?: AlphaBuyerQualityResponse;
+  /** Present with `include: "deployer"` — the `/deployer-hunter/{wallet}` body. */
+  deployer_profile?: DeployerProfileResponse;
+  /** Per-include errors (a failing include never fails the request). */
+  include_errors?: Record<string, { status: number; error?: string; [k: string]: unknown }>;
+  /** Includes that were requested. */
+  included?: string[];
   _rid?: string;
 }
 
 export interface TokenBatchResponse {
   tokens: TokenResponseBody[];
   count: number;
+  as_of?: string;
+  /** Fields that could not be read for this batch (null in every row, never defaults). */
+  degraded_fields?: string[];
   _rid?: string;
 }
 
@@ -4438,6 +4772,10 @@ export interface TokenListParams {
   min_liq_mc_ratio?: number;
   /** Filter by maximum liquidity_to_mc_ratio. */
   max_liq_mc_ratio?: number;
+  /** Token-SUPPLY burn observed (what `lp_burned` used to filter on). */
+  supply_burn?: boolean;
+  /** @deprecated Matches VERIFIED LP evidence only (nothing today) — use `lp_burn_status` per token or `supply_burn`. Sending it adds a `deprecations` entry. */
+  lp_burned?: boolean;
   /** Filter by deployer tier. */
   deployer_tier?: "elite" | "good" | "moderate" | "rising" | "cold" | "unranked";
 }
@@ -4463,6 +4801,21 @@ export interface TokenSummary {
   liquidity_to_mc_ratio?: number | null;
   /** Deployer Hunter tier for this token's deployer wallet. */
   deployer_tier?: string | null;
+  launchpad?: string | null;
+  /** VERIFIED LP evidence only; null = unknown (the honest answer for nearly every token today). */
+  lp_burned?: boolean | null;
+  lp_burn_status?: LpBurnStatus;
+  /** Token-SUPPLY burn observed (not LP evidence); null = unknown. */
+  token_supply_burn_detected?: boolean | null;
+}
+
+/** Disclosure for a deprecated `/tokens` parameter that was sent. */
+export interface TokensDeprecation {
+  param: string;
+  status: "deprecated";
+  /** Exactly what the parameter matches today. */
+  matches: string;
+  replacement: string;
 }
 
 export interface TokenListResponse {
@@ -4476,6 +4829,8 @@ export interface TokenListResponse {
     post_filtered: boolean;
   };
   filters: Record<string, unknown>;
+  /** Present only when a deprecated parameter (today: `lp_burned`) was sent. */
+  deprecations?: TokensDeprecation[];
   _rid?: string;
 }
 
@@ -4614,25 +4969,38 @@ export interface WatchlistResponse {
 }
 
 export interface WalletTrackerEvent {
-  id: string;
   wallet_address: string;
   label: string | null;
   event_type: WalletTrackerEventType;
-  action: WalletTrackerAction;
-  /** Solana block time (Unix seconds). */
+  /** `buy` / `sell` on swaps, `null` on transfers. */
+  action: WalletTrackerAction | null;
+  /** Unix seconds on the tracker's INGEST clock, not chain time. Use `slot` for chain order. */
   block_time: number;
-  /** Block time as ISO string. */
-  block_time_iso: string;
+  /** On-chain slot; null on rows written before slot tracking existed. */
+  slot: number | null;
+  /** true when the row arrived through a replay (reconnect/restart recovery), not live delivery. */
+  replayed: boolean;
+  /** ISO 8601 form of `block_time` (ingest time). */
+  ingested_at: string;
+  /** Alias of `ingested_at`, kept for older consumers. It never meant chain time. */
+  timestamp: string;
   token_mint: string | null;
   token_symbol: string | null;
   token_name: string | null;
-  sol_amount: number;
+  sol_amount: number | null;
   token_amount: number | null;
-  price_per_token_sol: number | null;
-  counterparty: string | null;
+  /** Present only when a counterparty was matched. */
+  counterparty?: string | null;
   /** Transaction signature — BASIC tier: null. */
   tx_signature: string | null;
-  program: string | null;
+  /** @deprecated Never sent by the API. */
+  id?: string;
+  /** @deprecated Never sent by the API — use `ingested_at`. */
+  block_time_iso?: string;
+  /** @deprecated Never sent by the API. */
+  price_per_token_sol?: number | null;
+  /** @deprecated Never sent by the API. */
+  program?: string | null;
 }
 
 export interface WalletTrackerTradesParams {
@@ -4644,13 +5012,24 @@ export interface WalletTrackerTradesParams {
   event_type?: WalletTrackerEventType;
   /** Max results (1–200). Default: 50. */
   limit?: number;
-  /** Cursor for pagination: block_time of the last item from the previous page. */
+  /** Cursor for pagination: block_time of the last item from the previous page (`next_cursor`). */
   before?: number;
+  /** Slot cursor (`next_cursor_slot`) — used with `order: "slot"`. */
+  before_slot?: number;
+  /** Page ordering column. */
+  order?: "slot" | "block_time";
 }
 
 export interface WalletTrackerTradesResponse {
   events: WalletTrackerEvent[];
   count: number;
+  /** Which column this page was ordered by. */
+  ordered_by: "slot" | "block_time";
+  /** `block_time` cursor for the next page (`before`); null on the last page. */
+  next_cursor: number | null;
+  /** Slot cursor for the next page (`before_slot`); null on the last page or on a page of pre-slot rows. */
+  next_cursor_slot: number | null;
+  _rid?: string;
 }
 
 export interface WalletTrackerWalletStats {
@@ -4729,6 +5108,15 @@ export interface StreamToken {
   /** DEX trade stream URL — only present for Ultra tier subscribers */
   dex_ws_url?: string | null;
   usage: string;
+  subscribe_example?: { type: "subscribe"; channels: string[] };
+  /** The full registry of subscribable channel names. */
+  channels?: string[];
+  /** token:prices requires filters.mints (1..mint_cap). */
+  token_prices?: { subscribe_example: Record<string, unknown>; mint_cap: number | null; note: string };
+  /** rhc:token_prices requires filters.addresses (1..address_cap, per connection across named subscriptions). */
+  rhc_token_prices?: { subscribe_example: Record<string, unknown>; address_cap: number | null; coalesce_ms: number; note: string };
+  /** Named subscriptions: several channel + filter sets on one socket. */
+  named_subscriptions?: { subscribe_example: Record<string, unknown>; max_per_connection: number | null; note: string };
   _rid?: string;
 }
 
@@ -4888,6 +5276,267 @@ export interface WebhookTestResponse {
   _rid?: string;
 }
 
+// ─── Contract-parity additions (unreleased) ──────────────────────────────────
+
+/** `client.kol.wallets()` params — `GET /kol/wallets`. */
+export interface KolWalletsParams {
+  /** 1–500, default 200. */
+  limit?: number;
+  /** 0–5000, default 0. */
+  offset?: number;
+  /** Default "true". Inactive wallets are kept for history but produce no new trades. */
+  active?: "true" | "false" | "all" | boolean;
+  /** Case-insensitive substring match on the KOL name (≤ 40 chars). */
+  q?: string;
+  /** Exact strategy_tag filter. */
+  strategy?: string;
+}
+
+/** One tracked KOL on `GET /kol/wallets` (roster only — performance lives in `/kol/leaderboard`). */
+export interface KolRosterWallet {
+  wallet_address: string;
+  name: string | null;
+  twitter_url: string | null;
+  avatar_url: string | null;
+  strategy_tag: string | null;
+  twitter_followers: number | null;
+  /** MadeOnSol users following this KOL. */
+  follow_count: number;
+  is_active: boolean;
+  tracked_since: string | null;
+}
+
+export interface KolWalletsResponse {
+  wallets: KolRosterWallet[];
+  count: number;
+  /** Total matching the filters (for paging). */
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+  /** Echo of the applied filters. */
+  filters?: { active: string; q: string | null; strategy: string | null };
+  note?: string;
+  _rid?: string;
+}
+
+/** `client.token.search()` params — `GET /tokens/search`. */
+export interface TokenSearchParams {
+  /** Ticker or name fragment (1–64 chars). 1 char = exact symbol only; 2+ symbol prefix; 3+ name prefix; 4+ fuzzy. */
+  q: string;
+  /** 1–50, default 10. */
+  limit?: number;
+}
+
+export interface TokenSearchResult {
+  mint: string;
+  symbol: string | null;
+  name: string | null;
+  match: "symbol_exact" | "symbol_prefix" | "name_prefix" | "fuzzy";
+  market_cap_usd: number | null;
+  liquidity_usd: number | null;
+  primary_dex: string | null;
+  last_trade_at: string | null;
+  image_url?: string | null;
+  twitter?: string | null;
+  website?: string | null;
+}
+
+export interface TokenSearchResponse {
+  q: string;
+  count: number;
+  results: TokenSearchResult[];
+  /** Present when q is a blue-chip ticker (results are namesakes) or when nothing matched. */
+  note?: string;
+  _rid?: string;
+}
+
+/** `client.manifests()` params — `GET /manifests`. */
+export interface ManifestsParams {
+  /** One dataset's history (newest first), e.g. "token_trades", "kol_trades". Pattern ^[a-z0-9_]{1,64}$. */
+  dataset?: string;
+  /** History depth when `dataset` is set: 1–365, default 30. */
+  limit?: number;
+}
+
+/** One nightly as-of manifest for a dataset. Cite `fingerprint` to name the exact dataset state. */
+export interface DatasetManifest {
+  dataset: string;
+  /** Night the manifest was measured on the streaming replica. */
+  data_as_of: string;
+  produced_at: string;
+  producer: string;
+  ts_column: string;
+  rows_24h: number;
+  min_ts: string | null;
+  max_ts: string | null;
+  /** Planner estimate (partitions summed), not an exact count. */
+  row_count_estimate: number;
+  /** md5 of the column:type list — a change means the shape of the data changed. */
+  schema_hash: string;
+  /** md5(dataset|max_ts|rows_24h|estimate). */
+  fingerprint: string;
+}
+
+export interface ManifestsResponse {
+  manifests: DatasetManifest[];
+  count: number;
+  dataset: string | null;
+  methodology_version: string;
+  note: string;
+  _rid?: string;
+}
+
+/** Signal names served by the Signal Scorecard. */
+export type SignalName = "dump_cluster_count" | "runner_rate" | "recycled_early_buyer_count" | "coordination_count" | "scout_first_touch";
+
+/** `GET /signals` — the Signal Scorecard catalog. */
+export interface SignalsCatalogResponse {
+  name: string;
+  description: string;
+  signals: { name: SignalName | string; methodology: string; performance_endpoint: string }[];
+  docs: string;
+  _rid?: string;
+}
+
+export interface SignalPerformanceBucket {
+  bucket: string;
+  hit_rate: number | null;
+  base_rate: number | null;
+  lift: number | null;
+  sample_n: number | null;
+}
+
+/** `GET /signals/{name}/performance`. Before the first computation the body is only `{ signal, buckets: [], note }`. */
+export interface SignalPerformanceResponse {
+  signal: string;
+  buckets: SignalPerformanceBucket[];
+  /** Present (with empty buckets) only when no performance data has been computed yet. */
+  note?: string | null;
+  metric_type?: string;
+  outcome?: string;
+  window_days?: number;
+  base_rate?: number | null;
+  test_from?: string | null;
+  test_to?: string | null;
+  as_of?: string;
+  methodology?: string;
+  /** Only with `history: true` — one entry per snapshot, newest first, ≤ 90. */
+  history?: { as_of: string; buckets: { bucket: string; hit_rate: number | null; lift: number | null; sample_n: number | null }[] }[] | null;
+  _rid?: string;
+}
+
+/** `client.wallet.flags()` params — `GET /wallet/{address}/flags`. */
+export interface WalletFlagsParams {
+  /** ISO-8601 with offset. Default: now. */
+  as_of?: string;
+  /** Include the change series (newest first, ≤ 200 rows). */
+  history?: boolean;
+}
+
+export type WalletFlagSource = "deployer" | "alpha" | "dump_cluster" | "kol" | "sniper" | "bundler";
+
+/** A source's latest snapshot at or before `as_of`, plus `snapshot_at` / `active` / `carried`. Other keys depend on the source. */
+export interface WalletFlagSnapshot {
+  snapshot_at: string;
+  /** false = a membership source whose latest row says the wallet dropped out. */
+  active: boolean;
+  /** true = recorded before `as_of` and unchanged by then. */
+  carried: boolean;
+  [key: string]: unknown;
+}
+
+export interface WalletFlagsResponse {
+  wallet: string;
+  as_of: string;
+  /** Sources with a snapshot at or before `as_of` whose latest state is still active. */
+  flagged: WalletFlagSource[];
+  /** One key per source; null = no snapshot at or before `as_of` (we had nothing on the wallet then). */
+  sources: Record<WalletFlagSource, WalletFlagSnapshot | null>;
+  /** Only with `history: true`. */
+  history?: { source: string; flags: Record<string, unknown>; snapshot_at: string }[];
+  /** Funding evidence block, when that feature is on for your tier. Opaque here: the dedicated funding endpoint is not bound by this SDK yet. */
+  funding?: Record<string, unknown>;
+  note: string;
+  _rid?: string;
+}
+
+/** `client.wallet.batchTrades()` params — `POST /wallet/batch/trades`. */
+export interface WalletBatchTradesParams {
+  /** 1–50 base58 wallet addresses. */
+  wallets: string[];
+  /** Unix seconds; only trades strictly after this. Default: 90 days ago (cannot reach further back). */
+  since?: number;
+  /** 1–100, default 20. */
+  limit_per_wallet?: number;
+  action?: "buy" | "sell";
+}
+
+export interface WalletBatchTrade {
+  tx_signature: string;
+  token_mint: string;
+  action: "buy" | "sell";
+  sol_amount: number;
+  token_amount: number;
+  /** This trade's executed price (sol_amount / token_amount). */
+  price_sol: number | null;
+  price_usd: number | null;
+  /** Canonical pool price sampled near this trade's slot. */
+  market_price_sol: number | null;
+  market_price_usd: number | null;
+  block_time: number;
+  traded_at: string;
+}
+
+export interface WalletBatchTradesResponse {
+  wallets: { wallet: string; count: number; trades: WalletBatchTrade[] }[];
+  since: number;
+  /** Newest block_time seen — pass back as `since` on the next poll. */
+  next_since: number;
+  limit_per_wallet: number;
+  coverage: { history_start_days: number; scope: string; note: string };
+  _rid?: string;
+}
+
+/** One wallet on `POST /wallet-list/score`. */
+export interface WalletListScoreEntry {
+  address: string;
+  status: "scored" | "no_trades" | "not_computed";
+  /** 0–100; null when there are no closed positions to score. */
+  score: number | null;
+  /** Same shape as `client.wallet.pnl()`'s `summary`; null unless status is "scored". */
+  pnl: WalletPnlSummary | null;
+  reputation?: {
+    is_sniper: boolean;
+    is_bundler: boolean;
+    is_dumper: boolean;
+    is_kol: boolean;
+    kol_name: string | null;
+    bot_confidence: BotConfidence | null;
+  };
+  cache_hit?: boolean | null;
+  computed_at?: string | null;
+  /** Seconds since computed_at. */
+  cache_age_seconds?: number | null;
+  /** Present only when status is "not_computed". */
+  message?: string;
+}
+
+export interface WalletListScoreResponse {
+  wallets: WalletListScoreEntry[];
+  count: number;
+  scored: number;
+  cached: number;
+  computed_now: number;
+  no_trades: number;
+  not_computed: number;
+  max_wallets: number;
+  max_live_compute: number;
+  score_methodology: string;
+  as_of: string;
+  _rid?: string;
+}
+
 // ─── Client config ────────────────────────────────────────────────────────────
 
 export interface MadeOnSolConfig {
@@ -4939,6 +5588,15 @@ class KolClient {
    * @param wallet Solana wallet address.
    * @param params Optional: include "pnl_by_token" for per-token breakdown.
    */
+  /**
+   * Tracked KOL roster (`GET /kol/wallets`): address, name, X handle, strategy
+   * tag, follower counts, tracked-since. Roster only; performance is in
+   * `leaderboard()` / `wallet()`. Any key.
+   */
+  wallets(params?: KolWalletsParams): Promise<KolWalletsResponse> {
+    return this._fetch(buildUrl(this._baseUrl, "/kol/wallets", params as Record<string, string | number | boolean | undefined>));
+  }
+
   wallet(wallet: string, params?: KolWalletParams): Promise<KolWalletProfile> {
     return this._fetch(buildUrl(this._baseUrl, `/kol/${encodeURIComponent(wallet)}`, params as Record<string, string | undefined>));
   }
@@ -5054,7 +5712,7 @@ class KolClient {
    * v1.9 — Scout leaderboard: top KOLs ranked by scout score, first-touch frequency,
    * and swarm attraction rate. ULTRA only.
    */
-  scoutLeaderboard(params?: ScoutLeaderboardParams): Promise<unknown> {
+  scoutLeaderboard(params?: ScoutLeaderboardParams): Promise<ScoutLeaderboardResponse> {
     return this._fetch(buildUrl(this._baseUrl, "/kol/scouts/leaderboard", params as Record<string, string | number | undefined>));
   }
 
@@ -5062,7 +5720,7 @@ class KolClient {
    * v1.9 — Coordination history: past coordination alert fires with token, score, KOL count.
    * ULTRA only.
    */
-  coordinationHistory(params?: CoordinationHistoryParams): Promise<unknown> {
+  coordinationHistory(params?: CoordinationHistoryParams): Promise<CoordinationHistoryResponse> {
     return this._fetch(buildUrl(this._baseUrl, "/kol/coordination/history", params as Record<string, string | number | undefined>));
   }
 }
@@ -5263,8 +5921,19 @@ class TokenClient {
    * **ULTRA** adds individual KOL wallet addresses in kol_activity.top_buyers[].
    * @param mint Token mint address (base58).
    */
-  get(mint: string): Promise<TokenResponse> {
-    return this._fetch(buildUrl(this._baseUrl, `/token/${encodeURIComponent(mint)}`));
+  get(mint: string, params?: TokenGetParams): Promise<TokenResponse> {
+    const include = Array.isArray(params?.include) ? params.include.join(",") : params?.include;
+    return this._fetch(buildUrl(this._baseUrl, `/token/${encodeURIComponent(mint)}`, include ? { include } : undefined));
+  }
+
+  /**
+   * Resolve a ticker or name to candidate mints (`GET /tokens/search`), ranked
+   * exact ticker, symbol prefix, name prefix, fuzzy — by liquidity inside each
+   * tier. Memecoin/launchpad universe only: `q: "SOL"` returns tokens NAMED SOL
+   * and `note` says so. Any key, including Free.
+   */
+  search(params: TokenSearchParams): Promise<TokenSearchResponse> {
+    return this._fetch(buildUrl(this._baseUrl, "/tokens/search", { q: params.q, limit: params.limit }));
   }
 
   /**
@@ -5798,6 +6467,9 @@ export interface SniperDeploy {
   detected_at: string;
   detection_region: string;
   detection_confirmed: boolean;
+  /** Deployer attribution cross-checked against the confirmed create tx (every 15 min). Distinct from `detection_confirmed` (transport-level). */
+  attribution_status?: "unverified" | "confirmed" | "corrected" | null;
+  attribution_checked_at?: string | null;
   deployer_tier: string | null;
   deployer_bond_rate: number | null;
   deployer_total_bonded: number | null;
@@ -6067,6 +6739,40 @@ class WalletClient {
       `/wallet/${encodeURIComponent(address)}/trades`,
       params as Record<string, string | number | undefined>,
     ));
+  }
+
+  /**
+   * Point-in-time wallet flags (`GET /wallet/{address}/flags`): for every flag
+   * source (deployer, alpha, dump_cluster, kol, sniper, bundler) the latest
+   * write-on-change snapshot at or before `as_of` (default now). A null source
+   * means we had nothing on the wallet then. Snapshots exist from 2026-08-28.
+   * **PRO+**.
+   */
+  flags(address: string, params?: WalletFlagsParams): Promise<WalletFlagsResponse> {
+    return this._get(buildUrl(
+      this._baseUrl,
+      `/wallet/${encodeURIComponent(address)}/flags`,
+      params as Record<string, string | boolean | undefined>,
+    ));
+  }
+
+  /**
+   * Recent trades for up to 50 wallets in one call (`POST /wallet/batch/trades`),
+   * the batch twin of `trades()`: newest first, 90-day window. Feed `next_since`
+   * back as `since` to poll. One quota unit. **PRO+**.
+   */
+  batchTrades(params: WalletBatchTradesParams): Promise<WalletBatchTradesResponse> {
+    return this._post(`${this._baseUrl}/wallet/batch/trades`, params);
+  }
+
+  /**
+   * Score a customer-supplied list of up to 200 wallets on FIFO trading
+   * performance (`POST /wallet-list/score`). Only the first 25 UNCACHED wallets
+   * are computed per call; the rest come back `status: "not_computed"`, so call
+   * again. **Enterprise tier only.**
+   */
+  scoreList(wallets: string[]): Promise<WalletListScoreResponse> {
+    return this._post(`${this._baseUrl}/wallet-list/score`, { wallets });
   }
 }
 
@@ -6593,18 +7299,34 @@ export class MadeOnSol {
   }
 
   /**
-   * Performance stats for a named signal — hit rate, precision, sample count,
-   * and lookback window. Available on all tiers.
+   * Signal Scorecard for one signal (`GET /signals/{name}/performance`):
+   * out-of-sample per-bucket hit rate, base rate and lift. `history: true` adds
+   * the per-snapshot series. Available on all tiers.
    *
-   * @param name Signal name (e.g. "kol_coordination", "first_touch_scout", "deployer_elite").
+   * @param name Signal name — see `listSignals()` (e.g. "dump_cluster_count", "scout_first_touch").
    * @example
    * ```ts
-   * const perf = await client.getSignalPerformance("kol_coordination");
-   * console.log(perf.precision, perf.hit_rate);
+   * const perf = await client.getSignalPerformance("dump_cluster_count");
+   * for (const b of perf.buckets) console.log(b.bucket, b.hit_rate, b.lift);
    * ```
    */
-  getSignalPerformance(name: string): Promise<unknown> {
-    return this._request(buildUrl(this._baseUrl, `/signals/${encodeURIComponent(name)}/performance`));
+  getSignalPerformance(name: SignalName | string, params?: { history?: boolean }): Promise<SignalPerformanceResponse> {
+    return this._request(buildUrl(this._baseUrl, `/signals/${encodeURIComponent(name)}/performance`, params));
+  }
+
+  /** Signal Scorecard catalog (`GET /signals`): every signal, its methodology and its performance endpoint. Any key. */
+  listSignals(): Promise<SignalsCatalogResponse> {
+    return this._request(buildUrl(this._baseUrl, "/signals"));
+  }
+
+  /**
+   * As-of dataset manifests (`GET /manifests`): one nightly manifest per dataset
+   * (rows in the last 24 h, min/max event time, planner row estimate,
+   * `schema_hash`, `fingerprint`). Cite the fingerprint to name the exact data
+   * state a report used; `dataset` walks one dataset's history. Any key.
+   */
+  manifests(params?: ManifestsParams): Promise<ManifestsResponse> {
+    return this._request(buildUrl(this._baseUrl, "/manifests", params as Record<string, string | number | undefined>));
   }
 
   private async _request<T>(url: string): Promise<T> {

@@ -6,7 +6,8 @@
   "exclude": [
     { "match": ["@alias"], "reason": "Path aliases (summary 'Alias of …') exist for customers who guess URLs; the SDK binds the canonical path, same handler." },
     { "match": ["GET /exports"], "reason": "Documented ahead of its route (SPEC_TIER_OVERRIDES in openapi-spec.ts); bind once the route ships." },
-    { "match": ["GET /status"], "reason": "Public service-status page feed, not a data endpoint; SDK users read it on the status page." }
+    { "match": ["GET /status"], "reason": "Public service-status page feed, not a data endpoint; SDK users read it on the status page." },
+    { "match": ["GET /wallet/{address}/funding"], "reason": "Wallet funding evidence (WALLET_FUNDING_API, PRO; relationships.* ULTRA+ redacted by projectFunding). The first-party typed madeonsol-x402 does not bind it either; bind it in both SDKs together with a typed tier-split shape instead of an opaque one. The PRO+ funding block already reaches SDK users opaquely on /wallet/{address}/flags and /deployer-hunter/{wallet}.", "owner": "Stijn", "review_by": "2026-12-31" }
   ],
   "exclude_fields": []
 }

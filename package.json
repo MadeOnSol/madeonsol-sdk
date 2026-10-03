@@ -17,7 +17,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "npm run build && node --test test/stream.test.mjs",
+    "test": "npm run build && tsc -p test/tsconfig.json && node --test test/stream.test.mjs test/contract-bindings.test.mjs",
     "route-parity": "node scripts/route-parity-check.mjs",
     "preflight": "bash ./scripts/preflight-publish.sh",
     "prepublishOnly": "npm run preflight && npm run build"

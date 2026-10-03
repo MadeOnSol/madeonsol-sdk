@@ -12,6 +12,8 @@
 Official TypeScript/JavaScript SDK for the **[MadeOnSol](https://madeonsol.com) Solana API** — zero dependencies, fully typed, works in Node.js ≥ 18 and edge runtimes.
 > Real-time Solana trading intelligence: track 1,069 KOL wallets with <3s latency on paid keys and x402 pay-per-call (free-tier live feeds are 5-min delayed), score 23,000+ Pump.fun deployers, surface deshred deploy signals **~500ms before on-chain confirmation**, detect multi-KOL coordination, score token rug-risk 0–100 with a transparent factor breakdown, expose the bundle cohort that bought a token together and how much of supply it still holds, verify any wallet's current on-chain holdings with airdrop/insider `transfer_delta` detection, push every pump.fun graduation the second it bonds, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day across 40+ endpoints (live feeds 5-min delayed) — no signup payment. Get a key at [madeonsol.com/pricing](https://madeonsol.com/pricing).
 
+> **Unreleased (SDK contract parity, 2026-10-03).** **New methods:** `client.kol.wallets(params?)` → `GET /kol/wallets` (tracked KOL roster, any key); `client.token.search({ q, limit? })` → `GET /tokens/search` (ticker/name → candidate mints, any key); `client.listSignals()` → `GET /signals`; `client.manifests(params?)` → `GET /manifests` (nightly as-of dataset manifests with `fingerprint`, any key); `client.wallet.flags(address, { as_of?, history? })` → `GET /wallet/{address}/flags` (point-in-time flags, PRO+); `client.wallet.batchTrades({ wallets, since?, limit_per_wallet?, action? })` → `POST /wallet/batch/trades` (PRO+); `client.wallet.scoreList(wallets)` → `POST /wallet-list/score` (Enterprise). `client.token.get(mint, { include })` accepts `buyer_quality` / `deployer`. **Typed (was `unknown`):** `kol.scoutLeaderboard()`, `kol.coordinationHistory()`, `getSignalPerformance()` (now also takes `{ history }`). **Type corrections (compile-time breaking, matching what the API has always returned):** `KolWalletProfile` (`kol`, `stats`, `scores`, `peer_ranks`, `recent_trades`, `pnl_by_token` with `total_bought`/`total_sold`), `KolTokenActivity` (`token_mint`, `summary`, `kols[]`), `AlphaLinkedResponse.linked` (with `avg_time_diff_secs`/`avg_sol_diff`), `DeployerTokensResponse.tokens` (`DeployerTokenRow`, with `instant_bond`), `WalletTrackerEvent` (`slot`, `replayed`, `ingested_at`, `timestamp`; `action` nullable) — the old never-sent keys stay as optional `@deprecated`. **New fields:** token snapshot (`/token/{mint}`, `/token/batch`) price provenance (`price_source`, `price_observed_at`, `price_is_stale`, `price_age_seconds`), `vwap_price_*`, `primary_pool_address`, `deployer_identity`, `lp_burn_status`, `token_supply_burn_detected`; `/tokens` rows `lp_burn_status` / `lp_burned` / `token_supply_burn_detected` + `deprecations`; risk `dev_status` / `resolved_from` and batch `unavailable` errors with `unavailable_inputs`; buyer-quality `signal_stats`; candles plan-floor fields; wallet PnL/positions `cache_age_seconds` / `cache_validation` / `cache_invalidated`; wallet-tracker `ordered_by` / `next_cursor` / `next_cursor_slot`; deployer stats MC-at-alert maps, alert-stats `sampled_rows`, `instant_bond` on recent bonds, typed `pump_tokens`; sniper `attribution_status`; stream-token channel registry + named-subscription hints; KOL PnL open-position `is_priced`; KOL compare `overlap_meta`. Not bound (reviewed exclusion): `GET /wallet/{address}/funding`.
+
 > **New in 3.0.0 (API parity 2026-10-03).** **Type fixes:** `KolConsensusResponse` now nests the figures under `consensus` (new `KolConsensus`) and `PeakHistoryResponse` under `peak_history` (new `PeakHistory`) — that is what the API has always returned; the old flat types read `undefined`. **New fields:** `TradeCoverage.size_floor` (`TradeSizeFloor`: the stored tape drops buys under 0.05 SOL / $3.50 in stables; live streams, prices and candles are unaffected) plus `data_observed` / `eligibility` / `eligibility_basis` / `completeness`; `WalletStatsResponse.stats_unavailable` / `enrichment_unavailable` / `degraded_fields` (a degraded read is UNKNOWN, never "no data"); token-lock provenance and countdowns on `TokenLock` (`provider`, `explorer`, `price_usd`, `seconds_until_end`, `seconds_until_next_unlock`, Bonfida `schedule`) and `cursor` / `next_cursor` + `degraded_fields` on the locks feed; copy-trade `min_mc_usd` / `max_mc_usd`, `source_wallets_tracked` / `source_wallets_untracked` / `warnings`; `ApiTier` adds `BUSINESS` / `ENTERPRISE`. **New method:** `client.token.topTraders(mint, params?)` → `GET /tokens/{mint}/top-traders` (PRO+).
 
 > **New in 3.0.0, continued (API parity 2026-10-03, second pass).** **Pagination:** `client.kol.feed()`, `client.kol.firstTouches()` and `client.deployer.alerts()` accept `cursor` (opaque strict keyset, preferred over the legacy `before`), and their responses carry `next_cursor`, `has_more` (false only at the real end of the feed), `scan` (`FeedScanInfo`, on post-filtered pages) and the free-tier delay fields (`FreeTierDelayMeta`); the KOL feed and first-touches also return `next_since` / `since` and a `stream` pointer, and `kol.feed()` accepts `since` and `include: "token"` (each trade gains `token`). `deployer.alerts()` accepts `token_mint` and returns `kol_buys_complete`. **New fields:** `KolLeaderboardResponse.pagination` / `universe` / `entry_mc_window_start` / `entry_mc_complete`, `KolLeaderboardEntry.entry_mc_samples` / `avg_entry_mc_usd`, `DeployerAlert.launchpad`, `DeployerSummary.instant_bonds` / `runner_tokens`. **Type corrections (breaking at compile time, matching what the API has always returned):** `client.deployer.profile()` returns `DeployerProfileResponse` (`is_deployer`, `deployer` row, `pump_stats`, `pump_tokens`, `pump_error`, `launchpad_tokens`, PRO+ `funding`) instead of the flat `DeployerProfile` (now deprecated); `TokenSurgeStreamEvent.kol` / `early_buyers` are nullable (null when `enrichment_available` is false); wallet tracker `addToWatchlist()` returns `{ wallet }`, `updateLabel()` returns `{ wallet }`, `removeFromWatchlist()` returns `{ removed }`; webhooks use `is_active` (the `status` field never existed on the wire, and `status` in an update was ignored), `create()` returns `{ webhook, note }` (the only response with `secret`), `update()` returns `{ webhook }`, `delete()` returns `{ deleted }`, events are typed `WebhookEvent` and filters `WebhookFilters`. **New methods:** `client.webhooks.get(id)` → `GET /webhooks/{id}` (with `recent_deliveries`); `client.webhooks.test(id, event?)` takes the optional event to sample.
@@ -219,9 +221,22 @@ Full profile for a single KOL wallet, including trade history and optional per-t
 const profile = await client.kol.wallet("7xKX...", {
   include: "pnl_by_token",
 });
+console.log(profile.kol.name, profile.scores.winrate_7d, profile.peer_ranks.percentile_pnl_7d);
 ```
 
 Returns: `KolWalletProfile`
+
+---
+
+#### `client.kol.wallets(params?)` *(unreleased)*
+
+The tracked KOL roster every `/kol/*` route is keyed on (`GET /kol/wallets`): address, name, X handle, strategy tag, follower counts, tracked-since. Roster only; performance is in `leaderboard()` / `wallet()`. Any key.
+
+```ts
+const { wallets, total, has_more } = await client.kol.wallets({ limit: 200, active: "true" });
+```
+
+Returns: `KolWalletsResponse`
 
 ---
 
@@ -432,7 +447,8 @@ Same HMAC scheme as coordination alerts. WebSocket channel: `kol:first_touches`.
 KOL buy/sell activity for a specific token mint.
 
 ```ts
-const activity = await client.kol.token("EPjFW...");
+const { summary, kols } = await client.kol.token("EPjFW...");
+console.log(summary.kol_count, summary.signal, kols[0]?.total_bought);
 ```
 
 Returns: `KolTokenActivity`
@@ -804,6 +820,35 @@ Returns: `WalletHoldingsResponse` — `holdings[]` (typed `Holding`), `sol_balan
 
 ---
 
+#### `client.wallet.flags(address, params?)` *(unreleased — PRO+)*
+
+Point-in-time wallet flags (`GET /wallet/{address}/flags`): for each source (`deployer`, `alpha`, `dump_cluster`, `kol`, `sniper`, `bundler`) the latest write-on-change snapshot at or before `as_of` (default now). `null` = we had no snapshot on the wallet then; `carried: true` = recorded earlier and unchanged by `as_of`. `history: true` adds the change series. Snapshots exist from 2026-08-28.
+
+```ts
+const f = await client.wallet.flags("ASVz...ybJk", { as_of: "2026-09-01T00:00:00Z" });
+console.log(f.flagged, f.sources.deployer?.carried);
+```
+
+Returns: `WalletFlagsResponse`
+
+#### `client.wallet.batchTrades(params)` *(unreleased — PRO+)*
+
+Recent trades for up to 50 wallets in one call (`POST /wallet/batch/trades`), up to 100 each, newest first, 90-day window. Pass `next_since` back as `since` to poll. One quota unit. `coverage` states the pipeline scope: an empty `trades` array means "not observed", not "inactive".
+
+```ts
+const page = await client.wallet.batchTrades({ wallets: [a, b, c], limit_per_wallet: 20 });
+for (const w of page.wallets) console.log(w.wallet, w.count);
+const next = await client.wallet.batchTrades({ wallets: [a, b, c], since: page.next_since });
+```
+
+Returns: `WalletBatchTradesResponse`
+
+#### `client.wallet.scoreList(wallets)` *(unreleased — Enterprise)*
+
+Score up to 200 customer-supplied wallets on FIFO trading performance (`POST /wallet-list/score`): a 0–100 `score` (50 % win rate + 50 % profit factor), the PnL `summary`, and reputation flags. Only the first 25 UNCACHED wallets are computed per call; the rest come back `status: "not_computed"`, so call again.
+
+Returns: `WalletListScoreResponse`
+
 #### `client.wallet.trades(address, params?)`
 
 Cursor-paginated raw trades. Default window is the last 90 days; override via `since` / `until` (Unix epoch seconds). Default limit 100, max 500.
@@ -998,6 +1043,19 @@ console.log(token.mev_volume_pct?.["1h"]);  // v1.7
 Invalid mints return a 400 with `code: "invalid_mint"`, `reason`, `received_length`, `example`, and `docs` URL — no trial and error.
 
 Returns: `TokenResponse` (with `mc_change_pct` / `volume_usd` / `mev_volume_pct` (each keyed by 5m/15m/1h/2h/4h) + `history_age_seconds` as of 1.7). **New in 2.12:** also returns `liquidity_to_mc_ratio` (liquidity_usd / market_cap), `launch_cohort_sol` (total SOL spent by the first-20 buyers), and `launch_cohort_size` (count of first-20 buyers, 0–20).
+
+#### `client.token.get(mint, { include })` / `client.token.search(params)` *(unreleased)*
+
+`include: "buyer_quality"` and/or `"deployer"` embeds the `/tokens/{mint}/buyer-quality` body as `buyer_quality` and the deployer profile as `deployer_profile` in the same call (each keeps its own tier gate; a failing include lands in `include_errors`, never fails the token).
+
+`client.token.search({ q, limit? })` (`GET /tokens/search`, any key) resolves a ticker or name to candidate mints, ranked exact ticker, symbol prefix, name prefix, fuzzy, and by liquidity inside each tier. Memecoin/launchpad universe only: `q: "SOL"` returns tokens *named* SOL and `note` says so.
+
+```ts
+const { results } = await client.token.search({ q: "bonk", limit: 5 });
+const { token, buyer_quality } = await client.token.get(results[0].mint, { include: ["buyer_quality"] });
+```
+
+Returns: `TokenSearchResponse` / `TokenResponse`
 
 #### `client.token.batch(mints)`
 
@@ -1255,13 +1313,24 @@ Returns: `MeResponse`
 Performance stats for a named signal: hit rate, precision, sample count, and lookback window.
 
 ```ts
-const perf = await client.getSignalPerformance("kol_coordination");
-console.log(perf.precision, perf.hit_rate);
+const { signals } = await client.listSignals();           // GET /signals — the catalog
+const perf = await client.getSignalPerformance("dump_cluster_count", { history: true });
+for (const b of perf.buckets) console.log(b.bucket, b.hit_rate, b.base_rate, b.lift, b.sample_n);
 ```
 
-Params: `name` — signal name (e.g. `"kol_coordination"`, `"first_touch_scout"`, `"deployer_elite"`).
+Params: `name` — a signal from `listSignals()` (`dump_cluster_count`, `runner_rate`, `recycled_early_buyer_count`, `coordination_count`, `scout_first_touch`); `history` adds the per-snapshot series.
 
-Returns: `Promise<unknown>` — shape varies by signal name; see `/api-docs` for the full schema.
+Returns: `SignalPerformanceResponse` (`listSignals()` → `SignalsCatalogResponse`).
+
+#### `client.manifests(params?)` *(unreleased)*
+
+Nightly as-of dataset manifests (`GET /manifests`): per dataset `rows_24h`, `min_ts` / `max_ts`, `row_count_estimate` (planner estimate), `schema_hash` and `fingerprint`. Cite the fingerprint to name the exact data state a report used; `dataset` walks one dataset's history. Any key.
+
+```ts
+const { manifests } = await client.manifests({ dataset: "token_trades", limit: 7 });
+```
+
+Returns: `ManifestsResponse`
 
 ---
 
