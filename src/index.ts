@@ -478,10 +478,40 @@ export interface ScoutLeaderboardParams {
 
 // ─── KOL consensus (v1.9) ──────────────────────────────────────────────────
 
+/**
+ * GET /tokens/{mint}/kol-consensus. FIX (2026-10-03 parity): the figures are
+ * nested under `consensus` — that is what the route has always returned;
+ * earlier versions of this type declared them at the top level, where they were
+ * always undefined. With no KOL trades: `consensus: null`,
+ * `total_kol_buyers: 0`, `total_kol_sellers: 0`, `complete: true`.
+ */
 export interface KolConsensusResponse {
+  mint: string;
+  current_mc_usd?: number | null;
+  current_price_usd?: number | null;
+  consensus: KolConsensus | null;
+  /** Only on the no-trades answer (then 0). */
+  total_kol_buyers?: number;
+  total_kol_sellers?: number;
+  complete?: boolean;
+  _rid?: string;
+}
+
+/** The `consensus` block of {@link KolConsensusResponse}. */
+export interface KolConsensus {
   total_kol_buyers: number;
   total_kol_sellers: number;
+  /** Share of KOL buyers with >=1 recorded sell (any size) — NOT a full position exit. */
   kol_exit_rate: number | null;
+  /** Accurately named copy of kol_exit_rate. */
+  kol_any_sell_rate?: number | null;
+  /** false when the trade read hit its row ceiling (numbers cover the oldest rows_scanned trades). */
+  complete?: boolean;
+  truncated?: boolean;
+  rows_scanned?: number;
+  /** Definition string for kol_exit_rate. */
+  kol_exit_rate_definition?: string;
+  total_trades?: number;
   net_flow_sol: number;
   total_buy_sol: number;
   total_sell_sol: number;
@@ -494,12 +524,26 @@ export interface KolConsensusResponse {
   buyers?: string[];
   /** ULTRA only — wallets that fully exited. */
   exited?: string[];
-  _rid?: string;
 }
 
 // ─── Peak history (v1.9) ───────────────────────────────────────────────────
 
+/**
+ * GET /tokens/{mint}/peak-history. FIX (2026-10-03 parity): the figures are
+ * nested under `peak_history` (null with `found: false` for an unknown mint);
+ * earlier versions of this type declared them at the top level, where they were
+ * always undefined.
+ */
 export interface PeakHistoryResponse {
+  mint: string;
+  found: boolean;
+  token?: { name: string | null; symbol: string | null; image_url: string | null };
+  peak_history: PeakHistory | null;
+  _rid?: string;
+}
+
+/** The `peak_history` block of {@link PeakHistoryResponse}. */
+export interface PeakHistory {
   peak_mc_usd: number | null;
   peak_mc_updated_at: string | null;
   current_mc_usd: number | null;
@@ -514,6 +558,62 @@ export interface PeakHistoryResponse {
   time_to_bond_minutes: number | null;
   deployed_at: string | null;
   bonded_at: string | null;
+  mc_tracking_complete?: boolean | null;
+}
+
+// ─── Token top traders ──────────────────────────────────────────────────────
+
+export interface TokenTopTradersParams {
+  /** 1-25 on PRO, up to 100 on ULTRA+. */
+  limit?: number;
+  /** Rank axis. Default "pnl". */
+  sort?: "pnl" | "roi";
+  /** Lookback window in days (1-180, default 90). */
+  window_days?: number;
+  /** Minimum SOL bought to qualify (default 0.1). */
+  min_bought_sol?: number;
+}
+
+/** One wallet in a top-traders response, enriched with KOL identity + alpha-wallet stats. */
+export interface TokenTopTrader {
+  rank: number;
+  wallet: string;
+  trades: number;
+  buys: number;
+  sells: number;
+  bought_sol: number;
+  sold_sol: number;
+  realized_pnl_sol: number;
+  unrealized_pnl_sol: number;
+  total_pnl_sol: number;
+  held_value_sol: number;
+  roi: number | null;
+  still_holding: boolean;
+  first_trade_at: string;
+  last_trade_at: string;
+  is_kol: boolean;
+  kol_name: string | null;
+  is_alpha_tracked: boolean;
+  bot_confidence: "low" | "medium" | "high" | "none" | null;
+  historical_win_rate: number | null;
+  historical_pnl_sol: number | null;
+  historical_tokens: number | null;
+}
+
+export interface TokenTopTradersResponse {
+  mint: string;
+  sort: "pnl" | "roi";
+  window_days: number;
+  traders: TokenTopTrader[];
+  summary: {
+    returned: number;
+    known_kols: number;
+    known_alpha_wallets: number;
+    net_realized_pnl_sol: number;
+  };
+  /** Trade-coverage disclosure; when `in_scope` is false an empty `traders`
+   *  list means "outside the write-gate", not "nobody traded". */
+  coverage?: TradeCoverage;
   _rid?: string;
 }
 
@@ -2060,10 +2160,45 @@ export interface TokenLockNextUnlock {
  * ui (`amount`, `locked`, …), `*_usd` and `*_pct_of_supply` fields are null when
  * decimals / price are unknown.
  */
+/**
+ * Who runs the lock contract, and how sure the server is (server 2026-10-02).
+ * `verified` = a known provider deployment (Streamflow / Jupiter Lock / Bonfida,
+ * identified by program id); `compatible` = only the instruction/event shape
+ * matches a known provider (`compatible_with`), the operator is NOT identified;
+ * `unverified` = unknown program. `id` / `website_url` are null unless verified.
+ * `lock_url` is a per-lock page on the provider site, set ONLY where its
+ * format is proven — for the Solana providers it is always null (never guessed).
+ */
+export interface TokenLockProvider {
+  id: string | null;
+  name: string | null;
+  identity: "verified" | "compatible" | "unverified";
+  compatible_with: string | null;
+  website_url: string | null;
+  lock_url: string | null;
+}
+
+/** Independent on-chain evidence on Solana Explorer (server 2026-10-02). */
+export interface TokenLockExplorer {
+  lock_account_url: string | null;
+  creation_tx_url: string | null;
+}
+
+/** One Bonfida vesting tranche (`TokenLock.schedule`). */
+export interface TokenLockTranche {
+  release_at: string | null;
+  /** Base units as a decimal string. */
+  amount_raw: string;
+}
+
 export interface TokenLock {
   /** The contract account (Streamflow stream / Jupiter VestingEscrow / Bonfida vesting account). */
   lock_account: string;
   program: TokenLockProgram;
+  /** Server 2026-10-02 — who runs the locker and how sure we are; see {@link TokenLockProvider}. Absent on older servers. */
+  provider?: TokenLockProvider;
+  /** Server 2026-10-02 — Solana Explorer links for the lock account and the creation tx. */
+  explorer?: TokenLockExplorer;
   kind: TokenLockKind;
   status: TokenLockStatus;
   mint: string;
@@ -2075,6 +2210,9 @@ export interface TokenLock {
   amount_raw: string;
   amount: number | null;
   amount_usd: number | null;
+  /** Server 2026-10-02 — the token price behind every `*_usd` field (null when unknown, stale or phantom). */
+  price_usd?: number | null;
+  /** % of CURRENT supply; null when unknown or above 100.5 (supply changed since the deposit). */
   amount_pct_of_supply: number | null;
   /** Still locked right now (amount − unlocked-so-far); "0" unless active. */
   locked_raw: string;
@@ -2093,6 +2231,10 @@ export interface TokenLock {
   cliff_at: string | null;
   /** Fully unlocked at; null = perpetual / no schedule. */
   end_at: string | null;
+  /** Server 2026-10-02 — seconds until fully unlocked (>= 0); 0 once completed; null when perpetual or cancelled / closed. */
+  seconds_until_end?: number | null;
+  /** Server 2026-10-02 — seconds until `next_unlock.at` (>= 0); null without a next unlock. */
+  seconds_until_next_unlock?: number | null;
   period_seconds: number | null;
   /** period < 1h (per-second stream, e.g. Streamflow payroll). */
   continuous: boolean;
@@ -2102,6 +2244,8 @@ export interface TokenLock {
   cliff_amount: number | null;
   perpetual: boolean;
   next_unlock: TokenLockNextUnlock | null;
+  /** Bonfida vesting only: the tranche list (absent on other programs). */
+  schedule?: TokenLockTranche[];
   /** The locker can cancel — funds are locked against the RECIPIENT, not the locker (a weaker promise). */
   cancelable_by_sender: boolean | null;
   cancelable_by_recipient: boolean | null;
@@ -2178,8 +2322,10 @@ export interface TokenLocksResponse {
 export interface TokenLocksFeedParams {
   /** ISO date-time — only contracts created after this instant (use `pagination.next_since`). */
   since?: string;
-  /** ISO date-time — page back: only contracts created before this instant (`pagination.next_before`). */
+  /** ISO date-time — page back: only contracts created before this instant (`pagination.next_before`). Legacy and strict: skips same-timestamp siblings — prefer `cursor`. */
   before?: string;
+  /** Opaque `pagination.next_cursor` from the previous page: strict (created_at, id) keyset, no repeats, no skips. Not combinable with `before`. */
+  cursor?: string;
   mint?: string;
   sender?: string;
   recipient?: string;
@@ -2205,6 +2351,13 @@ export interface TokenFeedPagination {
   next_since: string | null;
   /** Pass as `before` to page back. */
   next_before: string | null;
+  /** Locks feed — pass as `cursor` to page back without skipping same-timestamp rows; null = end. */
+  next_cursor?: string | null;
+  /** Present when a post-filter (min_usd / min_pct_of_supply / status) was scanned. */
+  post_filtered?: boolean;
+  scanned?: number;
+  scan_truncated?: boolean;
+  scan_budget?: number;
 }
 
 /** WebSocket pointer returned by the feed endpoints — the same rows are pushed live on `channel`. */
@@ -2220,6 +2373,8 @@ export interface TokenFeedStreamPointer {
 export interface TokenLocksFeedResponse {
   locks: TokenLockFeedEntry[];
   pagination: TokenFeedPagination;
+  /** "mint_facts:<table>" when a per-mint enrichment read failed; those rows' usd/ui/pct are null (unknown) and min_usd / min_pct_of_supply could not be applied to them. */
+  degraded_fields?: string[];
   /** Pointer to the `token:locks` WS channel (event `token:lock`). */
   stream: TokenFeedStreamPointer;
   meta?: Record<string, unknown>;
@@ -3390,6 +3545,29 @@ export interface TradeCoverage {
   /** Present when `in_scope` is `false`/`null` (and always on `/risk`) —
    * human-readable explanation of what the coverage gap means. */
   note?: string;
+  /** Same value as in_scope: persisted rows exist (presence, not completeness). */
+  data_observed?: boolean | null;
+  /** Does the CURRENT capture gate admit this mint? */
+  eligibility?: TradeEligibility | null;
+  eligibility_basis?: string | null;
+  /** Always "not_verified": rows existing never proves a complete interval. */
+  completeness?: "not_verified";
+  /** Persistence size floor of the stored trade tape (server 2026-09-30). */
+  size_floor?: TradeSizeFloor;
+}
+
+/** Treat unknown future values as "unknown". */
+export type TradeEligibility = "eligible" | "lapsed" | "excluded" | "unknown" | "admitted_previously" | "not_applicable";
+
+/**
+ * The stored trade tape drops buys under `min_sol` SOL (under `min_stable_usd`
+ * when paid in USDC/USDT); sells that RECEIVE SOL are kept at any size. Live
+ * streams, prices, market caps and candles are not subject to it.
+ */
+export interface TradeSizeFloor {
+  min_sol: number;
+  min_stable_usd: number;
+  applies_to: string;
 }
 
 /** Back-compat alias — the honesty block is no longer trades-specific. */
@@ -3720,6 +3898,19 @@ export interface WalletStatsResponse {
   /** v2.22.4 — trade-coverage disclosure; when `in_scope` is false an empty
    * `stats` block means "outside the write-gate", not "never traded". */
   coverage?: TradeCoverage;
+  /**
+   * Server 2026-10-01 — present (`true`) only when the 90-day aggregation
+   * failed: `stats: null` is then UNKNOWN, not an inactive wallet.
+   */
+  stats_unavailable?: boolean;
+  /** Present (`true`) only when one or more enrichment queries failed; see `degraded_fields`. */
+  enrichment_unavailable?: boolean;
+  /**
+   * Enrichment blocks whose query failed (e.g. a database timeout). Their
+   * `null` / `[]` is UNKNOWN, not "no data"; retry later. `biggest_miss`
+   * refers to `derived.biggest_miss`.
+   */
+  degraded_fields?: Array<"top_tokens" | "trading_style" | "deployer_breakdown" | "recent_trades" | "biggest_miss" | (string & {})>;
   _rid?: string;
 }
 
@@ -4159,7 +4350,7 @@ export interface AlmostBondedResponse {
 
 // ─── /me types — v1.7 ────────────────────────────────────────────────────────
 
-export type ApiTier = "BASIC" | "TRADER" | "PRO" | "ULTRA";
+export type ApiTier = "BASIC" | "TRADER" | "PRO" | "ULTRA" | "BUSINESS" | "ENTERPRISE";
 
 export interface MeQuotaWindow {
   limit: number;
@@ -4908,6 +5099,18 @@ class TokenClient {
    */
   peakHistory(mint: string): Promise<PeakHistoryResponse> {
     return this._fetch(buildUrl(this._baseUrl, `/tokens/${encodeURIComponent(mint)}/peak-history`));
+  }
+
+  /**
+   * The wallets that made (or lost) the most on a token, ranked by realized
+   * PnL or ROI, each enriched with KOL identity and alpha-wallet reputation
+   * (`bot_confidence`, historical win rate / PnL). `limit` PRO <= 25 /
+   * ULTRA <= 100; `sort` "pnl" (default) | "roi"; `window_days` 1-180
+   * (default 90); `min_bought_sol` default 0.1. PRO+.
+   * `GET /tokens/{mint}/top-traders`
+   */
+  topTraders(mint: string, params?: TokenTopTradersParams): Promise<TokenTopTradersResponse> {
+    return this._fetch(buildUrl(this._baseUrl, `/tokens/${encodeURIComponent(mint)}/top-traders`, params as Record<string, string | number | undefined>));
   }
 
   /**
@@ -5735,9 +5938,28 @@ export interface CopyTradeSubscription {
   sizing_amount: number;
   delivery_mode: CopyTradeDeliveryMode;
   webhook_url: string | null;
+  /** Market-cap band (USD) on the source trade; `null` = no bound. */
+  min_mc_usd?: number | null;
+  max_mc_usd?: number | null;
   is_active: boolean;
   created_at: string;
   updated_at?: string;
+  /**
+   * Source wallets that are tracked KOL wallets (can produce signals), read at
+   * response time. `null` when the tracking lookup failed (see `warnings`).
+   * Server 2026-09-25 on; absent on older ones.
+   */
+  source_wallets_tracked?: string[] | null;
+  /** Source wallets that are NOT tracked KOL wallets: they never produce a signal. */
+  source_wallets_untracked?: string[] | null;
+  /** Present when at least one wallet is untracked, or tracking could not be determined. */
+  warnings?: CopyTradeRuleWarning[];
+}
+
+/** A non-fatal note on a copy-trade rule. The rule is saved unchanged. */
+export interface CopyTradeRuleWarning {
+  code: "untracked_source_wallets" | "source_wallet_tracking_unavailable" | (string & {});
+  message: string;
 }
 
 export interface CopyTradeCreateParams {
@@ -5749,6 +5971,9 @@ export interface CopyTradeCreateParams {
   sizing_amount: number;
   delivery_mode?: CopyTradeDeliveryMode;
   webhook_url?: string;
+  /** Market-cap band (USD, 0 to 1e12, min <= max) on the source trade's MC at trade time. When either bound is set, trades with an unknown MC are dropped. */
+  min_mc_usd?: number | null;
+  max_mc_usd?: number | null;
 }
 
 export interface CopyTradeUpdateParams {
@@ -5761,6 +5986,9 @@ export interface CopyTradeUpdateParams {
   delivery_mode?: CopyTradeDeliveryMode;
   webhook_url?: string | null;
   is_active?: boolean;
+  /** Pass `null` to clear an MC bound. */
+  min_mc_usd?: number | null;
+  max_mc_usd?: number | null;
 }
 
 export interface CopyTradeCreateResponse {
@@ -5768,6 +5996,8 @@ export interface CopyTradeCreateResponse {
   /** Returned ONCE on creation when `webhook_url` is set — store it to verify HMAC signatures. */
   webhook_secret: string | null;
   note?: string;
+  /** Same as `subscription.warnings`, repeated at top level when present. */
+  warnings?: CopyTradeRuleWarning[];
 }
 
 export interface CopyTradeSignal {

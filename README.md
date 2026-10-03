@@ -12,6 +12,8 @@
 Official TypeScript/JavaScript SDK for the **[MadeOnSol](https://madeonsol.com) Solana API** — zero dependencies, fully typed, works in Node.js ≥ 18 and edge runtimes.
 > Real-time Solana trading intelligence: track 1,069 KOL wallets with <3s latency on paid keys and x402 pay-per-call (free-tier live feeds are 5-min delayed), score 23,000+ Pump.fun deployers, surface deshred deploy signals **~500ms before on-chain confirmation**, detect multi-KOL coordination, score token rug-risk 0–100 with a transparent factor breakdown, expose the bundle cohort that bought a token together and how much of supply it still holds, verify any wallet's current on-chain holdings with airdrop/insider `transfer_delta` detection, push every pump.fun graduation the second it bonds, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day across 40+ endpoints (live feeds 5-min delayed) — no signup payment. Get a key at [madeonsol.com/pricing](https://madeonsol.com/pricing).
 
+> **Unreleased (API parity 2026-10-03, version not yet bumped).** **Type fixes:** `KolConsensusResponse` now nests the figures under `consensus` (new `KolConsensus`) and `PeakHistoryResponse` under `peak_history` (new `PeakHistory`) — that is what the API has always returned; the old flat types read `undefined`. **New fields:** `TradeCoverage.size_floor` (`TradeSizeFloor`: the stored tape drops buys under 0.05 SOL / $3.50 in stables; live streams, prices and candles are unaffected) plus `data_observed` / `eligibility` / `eligibility_basis` / `completeness`; `WalletStatsResponse.stats_unavailable` / `enrichment_unavailable` / `degraded_fields` (a degraded read is UNKNOWN, never "no data"); token-lock provenance and countdowns on `TokenLock` (`provider`, `explorer`, `price_usd`, `seconds_until_end`, `seconds_until_next_unlock`, Bonfida `schedule`) and `cursor` / `next_cursor` + `degraded_fields` on the locks feed; copy-trade `min_mc_usd` / `max_mc_usd`, `source_wallets_tracked` / `source_wallets_untracked` / `warnings`; `ApiTier` adds `BUSINESS` / `ENTERPRISE`. **New method:** `client.token.topTraders(mint, params?)` → `GET /tokens/{mint}/top-traders` (PRO+).
+
 > **New in 2.29.0 — named subscriptions: several independent subscriptions per socket.** `subscribe({ subId, channels, filters })`, `updateSubscription(subId, filters)`, `unsubscribe(subId)`, `getSubscriptions()` / `listSubscriptions()`. Each named subscription has its own channels and filters (the server caps the total per connection, default included: PRO 5, ULTRA 10, BUSINESS 20); frames carry `evt.sub_id`; an event matching several subscriptions is delivered once per subscription (dedupe per `(sub_id, id)`). Resume is per subscription with one commit for the connection. The plain `subscribe(channels, filters)` API is unchanged. See "Named subscriptions" in the stream section.
 
 > **New in 2.28.0 — stream recovery: resume cursor, de-duplication, honest gaps.** The managed stream now tracks the cursor `{ instance, seq, ts }` of the last frame your handlers finished and resumes after it on every reconnect (the v1 `resume` request, with an automatic fallback to `replay_since_seq` / `replay_since_ts` on older servers). Delivery is at-least-once, de-duplicated by event `id`; new lifecycle events `cursor`, `replay`, `gap` (what could not be recovered — a `seq` gap is never loss) and `fatal`. Close codes are handled: 4001 re-fetches the token (bounded), 4002 waits ≥ 60 s instead of looping every second, 4003 stops, 4008 resumes; the backoff resets only after a `subscribed` ack. Every server `warning` frame is emitted (incl. `channels_rejected` / `channels_revoked`). `STREAM_CHANNELS` lists every Solana channel and `token:prices` joins the `StreamChannel` type. See the stream section's "Recovery" notes.
@@ -351,7 +353,9 @@ const data = await client.kol.coordinationHistory({ limit: 50, min_score: 70 });
 KOL consensus on a token: how many bought/sold, exit rate, net flow, median entry MC. **ULTRA** gets individual wallet arrays.
 
 ```ts
-const consensus = await client.token.kolConsensus("4sVahM4U8js62mQV58ABSkNRhf6Ztc7Xs2LXUznNpump");
+const { consensus } = await client.token.kolConsensus("4sVahM4U8js62mQV58ABSkNRhf6Ztc7Xs2LXUznNpump");
+// figures are nested under `consensus` (null when no KOL traded the mint)
+console.log(consensus?.total_kol_buyers, consensus?.kol_exit_rate);
 ```
 
 ---
@@ -361,7 +365,9 @@ const consensus = await client.token.kolConsensus("4sVahM4U8js62mQV58ABSkNRhf6Zt
 Peak MC history: ATH, decline from peak, MC at bond and at 1h/6h/24h/7d after bond.
 
 ```ts
-const peak = await client.token.peakHistory("4sVahM4U8js62mQV58ABSkNRhf6Ztc7Xs2LXUznNpump");
+const { found, peak_history } = await client.token.peakHistory("4sVahM4U8js62mQV58ABSkNRhf6Ztc7Xs2LXUznNpump");
+// figures are nested under `peak_history` (null with found: false for an unknown mint)
+console.log(found, peak_history?.peak_mc_usd);
 ```
 
 ---
