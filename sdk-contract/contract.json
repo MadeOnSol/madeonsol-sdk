@@ -1,0 +1,7795 @@
+{
+  "schema": 1,
+  "source": "MadeOnSol/madeonsol src/lib/openapi-spec.ts (scripts/generate-sdk-contract.mjs)",
+  "api_version": "1.20.0",
+  "contract_hash": "c11df4d1fc277e1f1469117d79af4b75f2bdb9113279fa554f2d8a1cdb6c1b87",
+  "operation_count": 197,
+  "operations": [
+    {
+      "id": "GET /alpha/leaderboard",
+      "method": "GET",
+      "path": "/alpha/leaderboard",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "exclude_bots",
+          "limit",
+          "min_tokens",
+          "offset",
+          "period",
+          "sort"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "coverage",
+          "entry_mc_complete",
+          "entry_mc_window_start",
+          "exclude_bots",
+          "leaderboard",
+          "min_tokens",
+          "pagination",
+          "period",
+          "sort",
+          "total"
+        ],
+        "items": {
+          "leaderboard": [
+            "active_hours",
+            "avg_entry_mc_usd",
+            "avg_rank",
+            "best_rank",
+            "bot_confidence",
+            "bundle_rate",
+            "buy_size_stddev",
+            "entry_mc_samples",
+            "last_seen",
+            "losses",
+            "net_pnl_sol",
+            "rank",
+            "roi",
+            "tokens_traded",
+            "total_buys",
+            "total_sells",
+            "total_sol_bought",
+            "total_sol_sold",
+            "wallet",
+            "win_rate",
+            "wins"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /alpha/{wallet}",
+      "method": "GET",
+      "path": "/alpha/{wallet}",
+      "chain": "solana",
+      "tier": "ULTRA",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "wallet"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "coverage",
+          "summary",
+          "tokens"
+        ],
+        "items": {
+          "tokens": [
+            "buy_count",
+            "first_buy_at",
+            "first_buy_sol",
+            "rank",
+            "realized_pnl_sol",
+            "result",
+            "sell_count",
+            "token_mint",
+            "total_sol_bought",
+            "total_sol_sold"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /alpha/{wallet}/linked",
+      "method": "GET",
+      "path": "/alpha/{wallet}/linked",
+      "chain": "solana",
+      "tier": "ULTRA",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "wallet"
+        ],
+        "query": [
+          "limit",
+          "min_overlap"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "coverage",
+          "linked",
+          "wallet"
+        ],
+        "items": {
+          "linked": [
+            "avg_sol_diff",
+            "avg_time_diff_secs",
+            "shared_tokens",
+            "similarity_score",
+            "wallet_address"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /copytrade/signals",
+      "method": "GET",
+      "path": "/copytrade/signals",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "limit",
+          "max_mc_usd",
+          "min_mc_usd",
+          "since",
+          "subscription_id"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "signals"
+        ],
+        "items": {
+          "signals": [
+            "action",
+            "delivered",
+            "delivered_at",
+            "fired_at",
+            "history_age_seconds",
+            "id",
+            "last_price_usd",
+            "market_cap_usd",
+            "market_cap_usd_at_trade",
+            "mc_change_pct",
+            "mev_volume_pct",
+            "price_usd_at_trade",
+            "source_sol_amount",
+            "source_wallet",
+            "subscription_id",
+            "suggested_sol_amount",
+            "token_mint",
+            "token_name",
+            "token_symbol",
+            "tx_signature",
+            "volume_usd"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /copytrade/subscriptions",
+      "method": "GET",
+      "path": "/copytrade/subscriptions",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "subscriptions"
+        ],
+        "items": {
+          "subscriptions": [
+            "created_at",
+            "delivery_mode",
+            "id",
+            "is_active",
+            "max_mc_usd",
+            "min_mc_usd",
+            "min_trade_sol",
+            "name",
+            "only_action",
+            "sizing_amount",
+            "sizing_mode",
+            "source_wallets",
+            "source_wallets_tracked",
+            "source_wallets_untracked",
+            "updated_at",
+            "warnings",
+            "webhook_url"
+          ]
+        }
+      }
+    },
+    {
+      "id": "POST /copytrade/subscriptions",
+      "method": "POST",
+      "path": "/copytrade/subscriptions",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [
+        "delivery_mode",
+        "max_mc_usd",
+        "min_mc_usd",
+        "min_trade_sol",
+        "name",
+        "only_action",
+        "sizing_amount",
+        "sizing_mode",
+        "source_wallets",
+        "webhook_url"
+      ],
+      "response": {
+        "top": [
+          "note",
+          "subscription",
+          "warnings",
+          "webhook_secret"
+        ],
+        "items": {
+          "warnings": [
+            "code",
+            "message"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /copytrade/subscriptions/{id}",
+      "method": "GET",
+      "path": "/copytrade/subscriptions/{id}",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "subscription",
+          "warnings"
+        ],
+        "items": {
+          "warnings": [
+            "code",
+            "message"
+          ]
+        }
+      }
+    },
+    {
+      "id": "PATCH /copytrade/subscriptions/{id}",
+      "method": "PATCH",
+      "path": "/copytrade/subscriptions/{id}",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "note",
+          "subscription",
+          "warnings",
+          "webhook_secret"
+        ],
+        "items": {
+          "warnings": [
+            "code",
+            "message"
+          ]
+        }
+      }
+    },
+    {
+      "id": "DELETE /copytrade/subscriptions/{id}",
+      "method": "DELETE",
+      "path": "/copytrade/subscriptions/{id}",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "deleted"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /deployer-hunter/alert-stats",
+      "method": "GET",
+      "path": "/deployer-hunter/alert-stats",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "period"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "bond_rate",
+          "multiplier",
+          "period",
+          "sampled_rows",
+          "tiers",
+          "truncated"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /deployer-hunter/alerts",
+      "method": "GET",
+      "path": "/deployer-hunter/alerts",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "alert_type",
+          "before",
+          "cursor",
+          "limit",
+          "min_kol_buys",
+          "offset",
+          "priority",
+          "since",
+          "tier",
+          "token_mint"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "alerts",
+          "as_of",
+          "coverage",
+          "data_age_seconds",
+          "delay",
+          "delay_note",
+          "delay_seconds",
+          "has_more",
+          "kol_buys_complete",
+          "limit",
+          "next_before",
+          "next_cursor",
+          "offset",
+          "scan",
+          "upgrade"
+        ],
+        "items": {
+          "alerts": [
+            "alert_type",
+            "created_at",
+            "deployer_sol_balance",
+            "deployers",
+            "id",
+            "kol_buys",
+            "launchpad",
+            "market_cap_at_alert",
+            "message",
+            "priority",
+            "title",
+            "token_mint",
+            "token_name",
+            "token_symbol"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /deployer-hunter/best-tokens",
+      "method": "GET",
+      "path": "/deployer-hunter/best-tokens",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "limit",
+          "period"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "coverage",
+          "limit",
+          "period",
+          "tokens"
+        ],
+        "items": {
+          "tokens": [
+            "alerted_at",
+            "bonded_at",
+            "deployer_tier",
+            "deployer_wallet",
+            "id",
+            "launchpad",
+            "market_cap_at_alert",
+            "mc_at_bond",
+            "mc_multiplier",
+            "peak_market_cap",
+            "token_image_url",
+            "token_mint",
+            "token_name",
+            "token_symbol"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /deployer-hunter/leaderboard",
+      "method": "GET",
+      "path": "/deployer-hunter/leaderboard",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "limit",
+          "offset",
+          "sort",
+          "tier"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "coverage",
+          "deployers",
+          "has_more",
+          "limit",
+          "offset",
+          "total"
+        ],
+        "items": {
+          "deployers": [
+            "avg_peak_mc",
+            "avg_time_to_bond_minutes",
+            "best_token_peak_mc",
+            "bonding_rate",
+            "first_seen_at",
+            "id",
+            "instant_bonds",
+            "is_tracked",
+            "label",
+            "last_bond_at",
+            "last_deploy_at",
+            "post_bond_2x_rate",
+            "post_bond_labeled_count",
+            "post_bond_survival_rate",
+            "recent_bond_rate",
+            "recent_outcomes",
+            "runner_rate",
+            "tier",
+            "total_bonded",
+            "total_tokens_deployed",
+            "wallet_address"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /deployer-hunter/recent-bonds",
+      "method": "GET",
+      "path": "/deployer-hunter/recent-bonds",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "limit",
+          "peak_mc_min",
+          "since",
+          "tier"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "as_of",
+          "coverage",
+          "delay",
+          "delay_note",
+          "delay_seconds",
+          "limit",
+          "next_since",
+          "tokens",
+          "upgrade"
+        ],
+        "items": {
+          "tokens": [
+            "bonded_at",
+            "deployed_at",
+            "deployers",
+            "id",
+            "instant_bond",
+            "mc_at_bond",
+            "peak_market_cap",
+            "time_to_bond_minutes",
+            "token_image_url",
+            "token_mint",
+            "token_name",
+            "token_symbol"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /deployer-hunter/stats",
+      "method": "GET",
+      "path": "/deployer-hunter/stats",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "avg_mc_at_alert_usd_30d",
+          "bond_rate",
+          "bonds_detected",
+          "coverage",
+          "mc_at_alert_complete",
+          "mc_at_alert_samples_30d",
+          "mc_at_alert_window_start",
+          "signals_today",
+          "tiers",
+          "tracked_count"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /deployer-hunter/{wallet}",
+      "method": "GET",
+      "path": "/deployer-hunter/{wallet}",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "wallet"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "coverage",
+          "deployer",
+          "funding",
+          "funding_features",
+          "is_deployer",
+          "launchpad_tokens",
+          "pump_error",
+          "pump_stats",
+          "pump_tokens",
+          "wallet"
+        ],
+        "items": {
+          "launchpad_tokens": [
+            "bonded_at",
+            "complete",
+            "deployed_at",
+            "launchpad",
+            "mint",
+            "name",
+            "peak_market_cap",
+            "symbol"
+          ],
+          "pump_tokens": [
+            "ath_market_cap",
+            "complete",
+            "created_timestamp",
+            "creator",
+            "image_uri",
+            "market_cap",
+            "mint",
+            "name",
+            "pool_address",
+            "pump_swap_pool",
+            "reply_count",
+            "symbol",
+            "usd_market_cap"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /deployer-hunter/{wallet}/as-of",
+      "method": "GET",
+      "path": "/deployer-hunter/{wallet}/as-of",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "wallet"
+        ],
+        "query": [
+          "date"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "as_of",
+          "coverage",
+          "first_snapshot_date",
+          "is_deployer",
+          "note",
+          "requested_date",
+          "snapshot",
+          "wallet"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /deployer-hunter/{wallet}/history",
+      "method": "GET",
+      "path": "/deployer-hunter/{wallet}/history",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "wallet"
+        ],
+        "query": [
+          "limit"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "coverage",
+          "is_deployer",
+          "snapshots",
+          "wallet"
+        ],
+        "items": {
+          "snapshots": [
+            "avg_peak_mc",
+            "best_token_peak_mc",
+            "bonding_rate",
+            "date",
+            "is_tracked",
+            "recent_bond_rate",
+            "tier",
+            "total_bonded",
+            "total_deployed"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /deployer-hunter/{wallet}/rewards",
+      "method": "GET",
+      "path": "/deployer-hunter/{wallet}/rewards",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "wallet"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "attributed",
+          "collected",
+          "coverage",
+          "is_deployer",
+          "quote",
+          "tokens_in_scope",
+          "top_recipients",
+          "top_tokens",
+          "wallet"
+        ],
+        "items": {
+          "top_recipients": [
+            "address",
+            "is_self",
+            "is_social_pda",
+            "last_at",
+            "payouts",
+            "quote",
+            "social",
+            "tokens",
+            "total",
+            "total_usd"
+          ],
+          "top_tokens": [
+            "last_at",
+            "mint",
+            "payouts",
+            "quote",
+            "recipients",
+            "to_self",
+            "to_self_usd",
+            "total",
+            "total_usd"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /deployer-hunter/{wallet}/tokens",
+      "method": "GET",
+      "path": "/deployer-hunter/{wallet}/tokens",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "wallet"
+        ],
+        "query": [
+          "limit",
+          "offset",
+          "only_bonded"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "coverage",
+          "has_more",
+          "is_deployer",
+          "limit",
+          "offset",
+          "tokens",
+          "total",
+          "wallet"
+        ],
+        "items": {
+          "tokens": [
+            "alerted_at",
+            "bonded_at",
+            "deployed_at",
+            "id",
+            "instant_bond",
+            "market_cap_at_alert",
+            "mc_at_bond",
+            "peak_market_cap",
+            "time_to_bond_minutes",
+            "token_mint",
+            "token_name",
+            "token_symbol"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /deployer-hunter/{wallet}/trajectory",
+      "method": "GET",
+      "path": "/deployer-hunter/{wallet}/trajectory",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "wallet"
+        ],
+        "query": [
+          "include"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "coverage",
+          "daily_snapshots",
+          "deployer",
+          "is_deployer",
+          "trajectory",
+          "wallet"
+        ],
+        "items": {
+          "daily_snapshots": [
+            "avg_peak_mc",
+            "best_token_peak_mc",
+            "bonding_rate",
+            "recent_bond_rate",
+            "snapshot_date",
+            "tier",
+            "total_bonded",
+            "total_tokens_deployed"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /exports",
+      "method": "GET",
+      "path": "/exports",
+      "chain": "solana",
+      "tier": "BUSINESS",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "dataset",
+          "month"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "bytes",
+          "dataset",
+          "datasets",
+          "files",
+          "license_note",
+          "month",
+          "rows"
+        ],
+        "items": {
+          "datasets": [
+            "dataset",
+            "months"
+          ],
+          "files": [
+            "bytes",
+            "expires_at",
+            "name",
+            "url"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /kol/alerts/recent",
+      "method": "GET",
+      "path": "/kol/alerts/recent",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "limit",
+          "types",
+          "window"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "alerts",
+          "count",
+          "types",
+          "window"
+        ],
+        "items": {
+          "alerts": [
+            "closed_positions_7d",
+            "detected_at",
+            "first_buy_at",
+            "kol_count",
+            "kol_name",
+            "kol_percentile_pnl_7d",
+            "kol_twitter",
+            "kol_winrate_7d",
+            "kols",
+            "last_price_usd",
+            "market_cap_usd",
+            "market_cap_usd_at_first_buy",
+            "market_cap_usd_at_trade",
+            "net_sol_flow",
+            "percentile_pnl_7d",
+            "pnl_7d",
+            "price_usd_at_trade",
+            "severity",
+            "signal",
+            "sol_amount",
+            "strategy_tag",
+            "time_to_consensus_sec",
+            "token_age_minutes",
+            "token_mint",
+            "token_name",
+            "token_symbol",
+            "type",
+            "wallet",
+            "winrate_7d"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /kol/compare",
+      "method": "GET",
+      "path": "/kol/compare",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "wallets"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "overlap",
+          "overlap_meta",
+          "profiles"
+        ],
+        "items": {
+          "overlap": [
+            "buy_count",
+            "token_mint",
+            "token_name",
+            "token_symbol",
+            "wallets"
+          ],
+          "profiles": [
+            "auto_strategy_tag",
+            "avg_roi_30d",
+            "avg_roi_7d",
+            "closed_positions_30d",
+            "closed_positions_7d",
+            "consistency_7d",
+            "early_entry_pct_30d",
+            "found",
+            "is_cold",
+            "is_heating_up",
+            "median_hold_minutes_30d",
+            "name",
+            "percentile_early_entry_30d",
+            "percentile_pnl_30d",
+            "percentile_pnl_7d",
+            "percentile_winrate_30d",
+            "percentile_winrate_7d",
+            "pnl_30d",
+            "pnl_7d",
+            "profit_factor_30d",
+            "profit_factor_7d",
+            "strategy_tag",
+            "twitter_url",
+            "wallet",
+            "winrate_30d",
+            "winrate_7d"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /kol/coordination",
+      "method": "GET",
+      "path": "/kol/coordination",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "include",
+          "include_majors",
+          "limit",
+          "max_mc_usd",
+          "min_avg_winrate",
+          "min_kols",
+          "min_mc_usd",
+          "min_score",
+          "period",
+          "unique_strategies",
+          "window_minutes"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "coordination",
+          "min_kols",
+          "period",
+          "score_version",
+          "universe",
+          "window_minutes"
+        ],
+        "items": {
+          "coordination": [
+            "avg_winrate_7d",
+            "coordination_score",
+            "entry_rank_avg",
+            "exited_count",
+            "first_buy_at",
+            "history_age_seconds",
+            "holders_count",
+            "kol_count",
+            "kols",
+            "last_buy_at",
+            "last_price_usd",
+            "market_cap_usd",
+            "market_cap_usd_at_first_buy",
+            "mc_change_pct",
+            "mev_volume_pct",
+            "net_sol_flow",
+            "peak_buys",
+            "peak_kols",
+            "peak_window_end",
+            "peak_window_start",
+            "signal",
+            "strategies",
+            "time_to_consensus_sec",
+            "token_mint",
+            "token_name",
+            "token_symbol",
+            "total_buys",
+            "total_sells",
+            "unique_strategies",
+            "volume_usd"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /kol/coordination/alerts",
+      "method": "GET",
+      "path": "/kol/coordination/alerts",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "rules"
+        ],
+        "items": {
+          "rules": [
+            "cooldown_min",
+            "created_at",
+            "delivery_mode",
+            "id",
+            "include_majors",
+            "is_active",
+            "max_mc_usd",
+            "min_kols",
+            "min_mc_usd",
+            "min_score",
+            "name",
+            "score_jump_break",
+            "updated_at",
+            "webhook_url",
+            "window_minutes"
+          ]
+        }
+      }
+    },
+    {
+      "id": "POST /kol/coordination/alerts",
+      "method": "POST",
+      "path": "/kol/coordination/alerts",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [
+        "cooldown_min",
+        "delivery_mode",
+        "include_majors",
+        "max_mc_usd",
+        "min_kols",
+        "min_mc_usd",
+        "min_score",
+        "name",
+        "score_jump_break",
+        "webhook_url",
+        "window_minutes"
+      ],
+      "response": {
+        "top": [
+          "note",
+          "rule",
+          "webhook_secret"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /kol/coordination/alerts/{id}",
+      "method": "GET",
+      "path": "/kol/coordination/alerts/{id}",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "rule"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "PATCH /kol/coordination/alerts/{id}",
+      "method": "PATCH",
+      "path": "/kol/coordination/alerts/{id}",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "rule"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "DELETE /kol/coordination/alerts/{id}",
+      "method": "DELETE",
+      "path": "/kol/coordination/alerts/{id}",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "deleted"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /kol/coordination/history",
+      "method": "GET",
+      "path": "/kol/coordination/history",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "limit",
+          "min_score",
+          "since"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "count",
+          "events"
+        ],
+        "items": {
+          "events": [
+            "coordination_score",
+            "current_mc_usd",
+            "current_price_usd",
+            "fired_at",
+            "kol_buyers",
+            "token_mint",
+            "total_fires"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /kol/feed",
+      "method": "GET",
+      "path": "/kol/feed",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "action",
+          "before",
+          "cursor",
+          "exclude_sells",
+          "include",
+          "kol",
+          "limit",
+          "max_mc_usd",
+          "min_kol_winrate",
+          "min_mc_usd",
+          "min_sol",
+          "since",
+          "strategy",
+          "token_age_max_min"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "as_of",
+          "count",
+          "data_age_seconds",
+          "delay",
+          "delay_note",
+          "delay_seconds",
+          "has_more",
+          "include_errors",
+          "include_truncated",
+          "included",
+          "next_before",
+          "next_cursor",
+          "next_since",
+          "scan",
+          "since",
+          "stream",
+          "trades",
+          "upgrade"
+        ],
+        "items": {
+          "trades": [
+            "action",
+            "deployer",
+            "deployer_tier",
+            "kol_auto_strategy_tag",
+            "kol_early_entry_pct_30d",
+            "kol_is_heating_up",
+            "kol_name",
+            "kol_percentile_pnl_7d",
+            "kol_percentile_winrate_7d",
+            "kol_strategy_tag",
+            "kol_twitter",
+            "kol_winrate_30d",
+            "kol_winrate_7d",
+            "launchpad",
+            "market_cap_usd_at_trade",
+            "price_usd_at_trade",
+            "sol_amount",
+            "token",
+            "token_age_minutes",
+            "token_amount",
+            "token_image_url",
+            "token_mint",
+            "token_name",
+            "token_symbol",
+            "traded_at",
+            "tx_signature",
+            "wallet_address"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /kol/first-touches",
+      "method": "GET",
+      "path": "/kol/first-touches",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "before",
+          "cursor",
+          "include",
+          "kol",
+          "limit",
+          "max_mc_usd",
+          "min_first_buy_sol",
+          "min_kol_winrate_7d",
+          "min_mc_usd",
+          "min_n_touches",
+          "min_scout_tier",
+          "mint_suffix",
+          "preset",
+          "since",
+          "strategy",
+          "token_age_max_min"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "count",
+          "data_age_seconds",
+          "events",
+          "has_more",
+          "include_errors",
+          "include_truncated",
+          "included",
+          "next_before",
+          "next_cursor",
+          "next_since",
+          "scan",
+          "since",
+          "stream"
+        ],
+        "items": {
+          "events": [
+            "first_buy_at",
+            "first_kol",
+            "followers_4h",
+            "last_price_usd",
+            "market_cap_usd",
+            "market_cap_usd_at_first_buy",
+            "price_usd_at_first_buy",
+            "sol_amount",
+            "token_age_minutes",
+            "token_amount",
+            "token_image_url",
+            "token_mint",
+            "token_name",
+            "token_symbol",
+            "tx_signature"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /kol/first-touches/subscriptions",
+      "method": "GET",
+      "path": "/kol/first-touches/subscriptions",
+      "chain": "solana",
+      "tier": "ULTRA",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "subscriptions"
+        ],
+        "items": {
+          "subscriptions": [
+            "created_at",
+            "delivery_mode",
+            "filters",
+            "id",
+            "is_active",
+            "max_mc_usd",
+            "min_mc_usd",
+            "name",
+            "updated_at",
+            "webhook_url"
+          ]
+        }
+      }
+    },
+    {
+      "id": "POST /kol/first-touches/subscriptions",
+      "method": "POST",
+      "path": "/kol/first-touches/subscriptions",
+      "chain": "solana",
+      "tier": "ULTRA",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [
+        "delivery_mode",
+        "filters",
+        "max_mc_usd",
+        "min_mc_usd",
+        "name",
+        "webhook_url"
+      ],
+      "response": {
+        "top": [
+          "note",
+          "subscription",
+          "webhook_secret"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /kol/first-touches/subscriptions/{id}",
+      "method": "GET",
+      "path": "/kol/first-touches/subscriptions/{id}",
+      "chain": "solana",
+      "tier": "ULTRA",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "subscription"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "PATCH /kol/first-touches/subscriptions/{id}",
+      "method": "PATCH",
+      "path": "/kol/first-touches/subscriptions/{id}",
+      "chain": "solana",
+      "tier": "ULTRA",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "subscription"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "DELETE /kol/first-touches/subscriptions/{id}",
+      "method": "DELETE",
+      "path": "/kol/first-touches/subscriptions/{id}",
+      "chain": "solana",
+      "tier": "ULTRA",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "ok"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /kol/leaderboard",
+      "method": "GET",
+      "path": "/kol/leaderboard",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "limit",
+          "min_winrate",
+          "offset",
+          "period",
+          "sort",
+          "strategy"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "entry_mc_complete",
+          "entry_mc_window_start",
+          "leaderboard",
+          "pagination",
+          "period",
+          "universe"
+        ],
+        "items": {
+          "leaderboard": [
+            "avg_entry_mc_usd",
+            "buy_count",
+            "entry_mc_samples",
+            "median_hold_minutes_30d",
+            "name",
+            "percentile_early_entry_30d",
+            "pnl",
+            "sell_count",
+            "volume",
+            "wallet",
+            "win_rate"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /kol/pairs",
+      "method": "GET",
+      "path": "/kol/pairs",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "limit",
+          "min_shared",
+          "offset",
+          "period"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "min_shared",
+          "pagination",
+          "pairs",
+          "period"
+        ],
+        "items": {
+          "pairs": [
+            "agreement_rate",
+            "kol_a",
+            "kol_b",
+            "shared_token_count",
+            "shared_tokens"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /kol/scouts/leaderboard",
+      "method": "GET",
+      "path": "/kol/scouts/leaderboard",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "limit",
+          "scout_tier",
+          "sort"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "count",
+          "scouts"
+        ],
+        "items": {
+          "scouts": [
+            "avatar_url",
+            "avg_followers_4h",
+            "computed_at",
+            "first_touches_30d",
+            "name",
+            "scout_tier",
+            "swarm_3plus_pct",
+            "swarm_5plus_pct",
+            "twitter_url",
+            "wallet"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /kol/tokens/hot",
+      "method": "GET",
+      "path": "/kol/tokens/hot",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "limit",
+          "min_avg_winrate",
+          "min_kols",
+          "offset",
+          "period",
+          "unique_strategies"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "hot_tokens",
+          "min_avg_winrate",
+          "min_kols",
+          "pagination",
+          "period",
+          "unique_strategies"
+        ],
+        "items": {
+          "hot_tokens": [
+            "acceleration",
+            "avg_winrate_7d",
+            "entry_rank_avg",
+            "first_kol_buy_age_minutes",
+            "first_kol_buy_at",
+            "kols",
+            "kols_recent",
+            "kols_total",
+            "last_kol_buy_at",
+            "net_flow",
+            "strategies",
+            "time_to_consensus_sec",
+            "token_image_url",
+            "token_mint",
+            "token_name",
+            "token_symbol",
+            "total_buy_sol",
+            "total_sell_sol",
+            "unique_strategies"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /kol/tokens/trending",
+      "method": "GET",
+      "path": "/kol/tokens/trending",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "limit",
+          "min_kols",
+          "offset",
+          "period"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "min_kols",
+          "pagination",
+          "period",
+          "trending",
+          "universe"
+        ],
+        "items": {
+          "trending": [
+            "buy_count",
+            "buy_volume_sol",
+            "first_buy_at",
+            "kol_count",
+            "kols",
+            "latest_buy_age_minutes",
+            "latest_buy_at",
+            "net_flow_sol",
+            "sell_count",
+            "sell_volume_sol",
+            "token_image_url",
+            "token_mint",
+            "token_name",
+            "token_symbol"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /kol/tokens/{mint}",
+      "method": "GET",
+      "path": "/kol/tokens/{mint}",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "mint"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "as_of",
+          "delay",
+          "delay_note",
+          "delay_seconds",
+          "kols",
+          "summary",
+          "token_mint",
+          "upgrade"
+        ],
+        "items": {
+          "kols": [
+            "buy_count",
+            "first_trade",
+            "last_trade",
+            "name",
+            "net_sol",
+            "position",
+            "sell_count",
+            "total_bought",
+            "total_sold",
+            "wallet"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /kol/tokens/{mint}/entry-order",
+      "method": "GET",
+      "path": "/kol/tokens/{mint}/entry-order",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "mint"
+        ],
+        "query": [
+          "limit"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "as_of",
+          "complete",
+          "delay",
+          "delay_note",
+          "delay_seconds",
+          "entries",
+          "first_buy_at",
+          "has_more",
+          "last_buy_at",
+          "returned",
+          "span_sec",
+          "token_mint",
+          "token_name",
+          "token_symbol",
+          "total_kol_buyers",
+          "upgrade"
+        ],
+        "items": {
+          "entries": [
+            "auto_strategy_tag",
+            "early_entry_pct_30d",
+            "first_buy_at",
+            "kol_name",
+            "kol_twitter",
+            "percentile_pnl_7d",
+            "percentile_winrate_7d",
+            "rank",
+            "seconds_after_first",
+            "sol_amount",
+            "strategy_tag",
+            "token_amount",
+            "tx_signature",
+            "wallet",
+            "winrate_30d",
+            "winrate_7d"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /kol/wallets",
+      "method": "GET",
+      "path": "/kol/wallets",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "active",
+          "limit",
+          "offset",
+          "q",
+          "strategy"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "count",
+          "has_more",
+          "limit",
+          "offset",
+          "total",
+          "wallets"
+        ],
+        "items": {
+          "wallets": [
+            "avatar_url",
+            "follow_count",
+            "is_active",
+            "name",
+            "strategy_tag",
+            "tracked_since",
+            "twitter_followers",
+            "twitter_url",
+            "wallet_address"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /kol/{wallet}",
+      "method": "GET",
+      "path": "/kol/{wallet}",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "wallet"
+        ],
+        "query": [
+          "include"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "kol",
+          "peer_ranks",
+          "pnl_by_token",
+          "recent_losers",
+          "recent_trades",
+          "recent_winners",
+          "scores",
+          "stats"
+        ],
+        "items": {
+          "pnl_by_token": [
+            "buy_count",
+            "first_trade",
+            "last_trade",
+            "pnl",
+            "result",
+            "sell_count",
+            "token_mint",
+            "token_name",
+            "token_symbol",
+            "total_bought",
+            "total_sold"
+          ],
+          "recent_losers": [
+            "buy_count",
+            "first_trade",
+            "last_trade",
+            "pnl",
+            "roi_pct",
+            "sell_count",
+            "token_mint",
+            "token_name",
+            "token_symbol"
+          ],
+          "recent_trades": [
+            "action",
+            "market_cap_usd_at_trade",
+            "price_usd_at_trade",
+            "sol_amount",
+            "token_amount",
+            "token_mint",
+            "token_name",
+            "token_symbol",
+            "traded_at",
+            "tx_signature"
+          ],
+          "recent_winners": [
+            "buy_count",
+            "first_trade",
+            "last_trade",
+            "pnl",
+            "roi_pct",
+            "sell_count",
+            "token_mint",
+            "token_name",
+            "token_symbol"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /kol/{wallet}/pnl",
+      "method": "GET",
+      "path": "/kol/{wallet}/pnl",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "wallet"
+        ],
+        "query": [
+          "period"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "closed_positions",
+          "kol",
+          "open_positions",
+          "period",
+          "pnl_curve",
+          "summary"
+        ],
+        "items": {
+          "closed_positions": [
+            "bought_sol",
+            "buy_count",
+            "first_trade",
+            "held_value_sol",
+            "hold_minutes",
+            "last_trade",
+            "pnl_sol",
+            "result",
+            "roi_pct",
+            "sell_count",
+            "sold_sol",
+            "still_holding",
+            "token_mint",
+            "token_name",
+            "token_symbol",
+            "unrealized_pnl_sol"
+          ],
+          "open_positions": [
+            "bought_sol",
+            "buy_count",
+            "first_buy_at",
+            "held_value_sol",
+            "is_priced",
+            "token_mint",
+            "token_name",
+            "token_symbol",
+            "unrealized_pnl_sol"
+          ],
+          "pnl_curve": [
+            "cumulative_pnl",
+            "date",
+            "day_pnl",
+            "trades"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /kol/{wallet}/timing",
+      "method": "GET",
+      "path": "/kol/{wallet}/timing",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "wallet"
+        ],
+        "query": [
+          "period"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "kol",
+          "period",
+          "timing"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /manifests",
+      "method": "GET",
+      "path": "/manifests",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "dataset",
+          "limit"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "count",
+          "dataset",
+          "manifests",
+          "methodology_version",
+          "note"
+        ],
+        "items": {
+          "manifests": [
+            "data_as_of",
+            "dataset",
+            "fingerprint",
+            "max_ts",
+            "min_ts",
+            "produced_at",
+            "producer",
+            "row_count_estimate",
+            "rows_24h",
+            "schema_hash",
+            "ts_column"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /me",
+      "method": "GET",
+      "path": "/me",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "features",
+          "quota",
+          "subscriber",
+          "subscription",
+          "tier",
+          "tier_label"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /price-alerts",
+      "method": "GET",
+      "path": "/price-alerts",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "alerts"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "POST /price-alerts",
+      "method": "POST",
+      "path": "/price-alerts",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [
+        "delivery_mode",
+        "drop_pct",
+        "name",
+        "recovery_pct",
+        "token_mint",
+        "webhook_url"
+      ],
+      "response": {
+        "top": [
+          "alert",
+          "note",
+          "webhook_secret"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /price-alerts/events",
+      "method": "GET",
+      "path": "/price-alerts/events",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "alert_id",
+          "event_type",
+          "limit",
+          "since"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "events"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /price-alerts/{id}",
+      "method": "GET",
+      "path": "/price-alerts/{id}",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "alert"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "PATCH /price-alerts/{id}",
+      "method": "PATCH",
+      "path": "/price-alerts/{id}",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [
+        "delivery_mode",
+        "is_active",
+        "name",
+        "webhook_url"
+      ],
+      "response": {
+        "top": [
+          "alert"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "DELETE /price-alerts/{id}",
+      "method": "DELETE",
+      "path": "/price-alerts/{id}",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "deleted"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/alpha-wallets",
+      "method": "GET",
+      "path": "/rhc/alpha-wallets",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "active_hours",
+          "classification",
+          "identity",
+          "include_zero_cost_dumps",
+          "limit",
+          "max_avg_mc_usd",
+          "max_win_rate",
+          "min_buy_eth",
+          "min_memecoin_share",
+          "min_net_eth",
+          "min_tokens",
+          "min_trades",
+          "min_win_rate",
+          "offset",
+          "order",
+          "sort"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "attribution",
+          "chain",
+          "has_more",
+          "limit",
+          "offset",
+          "total",
+          "wallets"
+        ],
+        "items": {
+          "wallets": [
+            "avg_trade_mc_usd",
+            "buy_eth",
+            "classification",
+            "is_known_kol",
+            "last_trade_at",
+            "memecoin_share",
+            "net_eth",
+            "sell_eth",
+            "tokens",
+            "trades",
+            "wallet",
+            "win_rate",
+            "zero_cost_share"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/alpha/leaderboard",
+      "method": "GET",
+      "path": "/rhc/alpha/leaderboard",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": "/rhc/alpha-wallets",
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "attribution",
+          "chain",
+          "has_more",
+          "limit",
+          "offset",
+          "total",
+          "wallets"
+        ],
+        "items": {
+          "wallets": [
+            "avg_trade_mc_usd",
+            "buy_eth",
+            "classification",
+            "is_known_kol",
+            "last_trade_at",
+            "memecoin_share",
+            "net_eth",
+            "sell_eth",
+            "tokens",
+            "trades",
+            "wallet",
+            "win_rate",
+            "zero_cost_share"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/copytrade/signals",
+      "method": "GET",
+      "path": "/rhc/copytrade/signals",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "limit",
+          "since",
+          "subscription_id"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "count",
+          "signals"
+        ],
+        "items": {
+          "signals": [
+            "action",
+            "delivered",
+            "delivered_at",
+            "dex",
+            "fired_at",
+            "id",
+            "price_usd",
+            "source_eth_amount",
+            "source_wallet",
+            "subscription_id",
+            "suggested_eth_amount",
+            "token_address",
+            "token_name",
+            "token_symbol",
+            "tx_hash"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/copytrade/subscriptions",
+      "method": "GET",
+      "path": "/rhc/copytrade/subscriptions",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "subscriptions"
+        ],
+        "items": {
+          "subscriptions": [
+            "created_at",
+            "delivery_mode",
+            "id",
+            "is_active",
+            "min_trade_eth",
+            "name",
+            "only_action",
+            "operational_state",
+            "sizing_amount",
+            "sizing_mode",
+            "source_wallets",
+            "source_wallets_tracked",
+            "source_wallets_untracked",
+            "updated_at",
+            "warnings",
+            "webhook_url"
+          ]
+        }
+      }
+    },
+    {
+      "id": "POST /rhc/copytrade/subscriptions",
+      "method": "POST",
+      "path": "/rhc/copytrade/subscriptions",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [
+        "delivery_mode",
+        "min_trade_eth",
+        "name",
+        "only_action",
+        "sizing_amount",
+        "sizing_mode",
+        "source_wallets",
+        "webhook_url"
+      ],
+      "response": {
+        "top": [
+          "chain",
+          "note",
+          "subscription",
+          "warnings",
+          "webhook_secret"
+        ],
+        "items": {
+          "warnings": [
+            "code",
+            "message"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/copytrade/subscriptions/{id}",
+      "method": "GET",
+      "path": "/rhc/copytrade/subscriptions/{id}",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "subscription",
+          "warnings"
+        ],
+        "items": {
+          "warnings": [
+            "code",
+            "message"
+          ]
+        }
+      }
+    },
+    {
+      "id": "PATCH /rhc/copytrade/subscriptions/{id}",
+      "method": "PATCH",
+      "path": "/rhc/copytrade/subscriptions/{id}",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [
+        "delivery_mode",
+        "is_active",
+        "min_trade_eth",
+        "name",
+        "only_action",
+        "sizing_amount",
+        "sizing_mode",
+        "source_wallets",
+        "webhook_url"
+      ],
+      "response": {
+        "top": [
+          "chain",
+          "subscription",
+          "warnings"
+        ],
+        "items": {
+          "warnings": [
+            "code",
+            "message"
+          ]
+        }
+      }
+    },
+    {
+      "id": "DELETE /rhc/copytrade/subscriptions/{id}",
+      "method": "DELETE",
+      "path": "/rhc/copytrade/subscriptions/{id}",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "deleted"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/deployer-hunter/alerts",
+      "method": "GET",
+      "path": "/rhc/deployer-hunter/alerts",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "alert_type",
+          "before",
+          "cursor",
+          "deployer_tier",
+          "include_untradeable",
+          "launchpad",
+          "limit",
+          "min_mc",
+          "offset",
+          "priority",
+          "since"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "alerts",
+          "chain",
+          "data_age_seconds",
+          "has_more",
+          "limit",
+          "liquidity_note",
+          "next_before",
+          "next_cursor",
+          "next_event_at",
+          "offset",
+          "scan",
+          "tradability_filter"
+        ],
+        "items": {
+          "alerts": [
+            "alert_type",
+            "created_at",
+            "current_mc_usd",
+            "deployer_address",
+            "event_at",
+            "id",
+            "is_active",
+            "launchpad",
+            "liquidity_basis",
+            "liquidity_usd",
+            "mc_at_alert",
+            "message",
+            "priority",
+            "risk",
+            "tier",
+            "tier_at_alert",
+            "tier_is_stale",
+            "title",
+            "token_address",
+            "token_name",
+            "token_symbol"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/deployer-hunter/best-tokens",
+      "method": "GET",
+      "path": "/rhc/deployer-hunter/best-tokens",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "limit",
+          "period"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "candidates_scanned",
+          "chain",
+          "limit",
+          "period",
+          "reputable_deployers",
+          "tokens",
+          "truncated"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/deployer-hunter/leaderboard",
+      "method": "GET",
+      "path": "/rhc/deployer-hunter/leaderboard",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "limit",
+          "min_tokens",
+          "offset",
+          "sort",
+          "tier"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "deployers",
+          "has_more",
+          "limit",
+          "offset",
+          "total"
+        ],
+        "items": {
+          "deployers": [
+            "best_peak_mc_usd",
+            "deployer_address",
+            "first_deploy_at",
+            "graduated",
+            "graduation_rate",
+            "last_deploy_at",
+            "launchpads",
+            "runner_rate",
+            "runners",
+            "tier",
+            "tokens_deployed"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/deployer-hunter/recent-bonds",
+      "method": "GET",
+      "path": "/rhc/deployer-hunter/recent-bonds",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "cursor",
+          "deployer_tier",
+          "limit",
+          "min_peak"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "graduation_mc",
+          "has_more",
+          "limit",
+          "next_cursor",
+          "next_peak_mc_at",
+          "scan",
+          "tokens"
+        ],
+        "items": {
+          "tokens": [
+            "address",
+            "deployer_address",
+            "deployer_tier",
+            "first_seen_at",
+            "is_graduated",
+            "launchpad",
+            "market_cap_usd",
+            "name",
+            "peak_mc_at",
+            "peak_mc_usd",
+            "symbol"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/deployer-hunter/stats",
+      "method": "GET",
+      "path": "/rhc/deployer-hunter/stats",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "alerts_24h",
+          "alerts_7d",
+          "by_tier",
+          "chain",
+          "graduation_definition",
+          "reputable_deployers",
+          "runner_definition",
+          "spam_token_share",
+          "tier_rules",
+          "total_deployers",
+          "total_tokens"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/deployer-hunter/{address}",
+      "method": "GET",
+      "path": "/rhc/deployer-hunter/{address}",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "address",
+          "chain",
+          "deployer",
+          "is_deployer",
+          "recent_tokens",
+          "recent_tokens_count"
+        ],
+        "items": {
+          "recent_tokens": [
+            "address",
+            "first_seen_at",
+            "graduated_at",
+            "graduated_pool",
+            "is_graduated",
+            "launchpad",
+            "market_cap_usd",
+            "name",
+            "peak_mc_at",
+            "peak_mc_usd",
+            "symbol"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/deployer-hunter/{address}/history",
+      "method": "GET",
+      "path": "/rhc/deployer-hunter/{address}/history",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": [
+          "limit",
+          "offset"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "address",
+          "chain",
+          "deployer",
+          "has_more",
+          "is_deployer",
+          "limit",
+          "offset",
+          "tokens",
+          "total"
+        ],
+        "items": {
+          "tokens": [
+            "address",
+            "first_seen_at",
+            "graduated_at",
+            "graduated_pool",
+            "is_graduated",
+            "launchpad",
+            "market_cap_usd",
+            "name",
+            "peak_mc_at",
+            "peak_mc_usd",
+            "symbol"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/deployer-hunter/{address}/tokens",
+      "method": "GET",
+      "path": "/rhc/deployer-hunter/{address}/tokens",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": [
+          "limit",
+          "offset",
+          "sort"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "address",
+          "chain",
+          "deployer",
+          "has_more",
+          "is_deployer",
+          "limit",
+          "offset",
+          "sort",
+          "sort_scope",
+          "tokens",
+          "total"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/deployer-hunter/{address}/trajectory",
+      "method": "GET",
+      "path": "/rhc/deployer-hunter/{address}/trajectory",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "address",
+          "chain",
+          "deployer",
+          "is_deployer",
+          "success_metric",
+          "trajectory",
+          "truncated"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/equities",
+      "method": "GET",
+      "path": "/rhc/equities",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "limit",
+          "q",
+          "sort",
+          "symbol"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "count",
+          "equities",
+          "identity",
+          "sort",
+          "stats_as_of",
+          "stats_window",
+          "total_equities"
+        ],
+        "items": {
+          "equities": [
+            "asset_class",
+            "buyers_24h",
+            "buys_24h",
+            "decimals",
+            "fdv_usd",
+            "issuer_beacon",
+            "last_trade_time",
+            "liquidity_basis",
+            "liquidity_usd",
+            "listed_at",
+            "market_cap_usd",
+            "name",
+            "onchain_name",
+            "peak_mc_usd",
+            "price_native",
+            "price_usd",
+            "primary_dex",
+            "primary_pool",
+            "sellers_24h",
+            "sells_24h",
+            "symbol",
+            "token_address",
+            "trades_24h",
+            "verified",
+            "volume_eth_24h"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/kol/coordination",
+      "method": "GET",
+      "path": "/rhc/kol/coordination",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "limit",
+          "max_mc_usd",
+          "min_kols",
+          "min_mc_usd",
+          "period"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "coordination",
+          "count",
+          "min_kols",
+          "period"
+        ],
+        "items": {
+          "coordination": [
+            "buy_eth",
+            "current_mc_usd",
+            "deployer_tier",
+            "exited_count",
+            "first_buy_at",
+            "holders_count",
+            "is_graduated",
+            "kol_count",
+            "kols",
+            "last_buy_at",
+            "launchpad",
+            "liquidity_basis",
+            "liquidity_usd",
+            "market_cap_usd_at_first_buy",
+            "net_eth",
+            "peak_mc_usd",
+            "sell_eth",
+            "signal",
+            "time_to_consensus_sec",
+            "token_address",
+            "token_age_minutes",
+            "token_name",
+            "token_symbol",
+            "total_buys"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/kol/coordination/alerts",
+      "method": "GET",
+      "path": "/rhc/kol/coordination/alerts",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "rules"
+        ],
+        "items": {
+          "rules": [
+            "cooldown_min",
+            "created_at",
+            "delivery_mode",
+            "id",
+            "is_active",
+            "max_mc_usd",
+            "min_kols",
+            "min_mc_usd",
+            "min_score",
+            "name",
+            "score_jump_break",
+            "updated_at",
+            "webhook_url",
+            "window_minutes"
+          ]
+        }
+      }
+    },
+    {
+      "id": "POST /rhc/kol/coordination/alerts",
+      "method": "POST",
+      "path": "/rhc/kol/coordination/alerts",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [
+        "cooldown_min",
+        "delivery_mode",
+        "max_mc_usd",
+        "min_kols",
+        "min_mc_usd",
+        "min_score",
+        "name",
+        "score_jump_break",
+        "webhook_url",
+        "window_minutes"
+      ],
+      "response": {
+        "top": [
+          "chain",
+          "note",
+          "rule",
+          "scoring",
+          "webhook_secret"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/kol/coordination/alerts/{id}",
+      "method": "GET",
+      "path": "/rhc/kol/coordination/alerts/{id}",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "rule"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "PATCH /rhc/kol/coordination/alerts/{id}",
+      "method": "PATCH",
+      "path": "/rhc/kol/coordination/alerts/{id}",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [
+        "cooldown_min",
+        "delivery_mode",
+        "is_active",
+        "max_mc_usd",
+        "min_kols",
+        "min_mc_usd",
+        "min_score",
+        "name",
+        "score_jump_break",
+        "webhook_url",
+        "window_minutes"
+      ],
+      "response": {
+        "top": [
+          "chain",
+          "rule"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "DELETE /rhc/kol/coordination/alerts/{id}",
+      "method": "DELETE",
+      "path": "/rhc/kol/coordination/alerts/{id}",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "deleted"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/kol/feed",
+      "method": "GET",
+      "path": "/rhc/kol/feed",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "action",
+          "before",
+          "cursor",
+          "exclude_sells",
+          "kol",
+          "limit",
+          "max_mc_usd",
+          "min_eth",
+          "min_kol_winrate",
+          "min_mc_usd",
+          "strategy",
+          "token_age_max_min"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "count",
+          "data_age_seconds",
+          "filtered_by",
+          "has_more",
+          "matched_kols",
+          "next_before",
+          "next_cursor",
+          "scan",
+          "trades"
+        ],
+        "items": {
+          "trades": [
+            "action",
+            "block_number",
+            "current_mc_usd",
+            "deployer_tier",
+            "dex",
+            "eth_amount",
+            "evm_address",
+            "is_graduated",
+            "kol_name",
+            "kol_score",
+            "kol_twitter",
+            "launchpad",
+            "liquidity_basis",
+            "liquidity_usd",
+            "market_cap_usd_at_trade",
+            "mc_multiple_since_trade",
+            "peak_mc_usd",
+            "pool",
+            "price_usd_at_trade",
+            "risk",
+            "token_address",
+            "token_age_minutes",
+            "token_amount",
+            "token_name",
+            "token_symbol",
+            "traded_at",
+            "tx_hash"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/kol/first-touches",
+      "method": "GET",
+      "path": "/rhc/kol/first-touches",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "before",
+          "cursor",
+          "launchpad",
+          "limit",
+          "max_mc_usd",
+          "min_eth",
+          "min_mc_usd",
+          "since",
+          "token_age_max_min"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "count",
+          "data_age_seconds",
+          "events",
+          "has_more",
+          "next_before",
+          "next_cursor"
+        ],
+        "items": {
+          "events": [
+            "current_mc_usd",
+            "eth_amount",
+            "first_buy_at",
+            "first_kol",
+            "is_graduated",
+            "launchpad",
+            "market_cap_usd_at_first_buy",
+            "peak_mc_usd",
+            "price_usd_at_first_buy",
+            "token_address",
+            "token_age_minutes",
+            "token_amount",
+            "token_name",
+            "token_symbol",
+            "tx_hash"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/kol/first-touches/subscriptions",
+      "method": "GET",
+      "path": "/rhc/kol/first-touches/subscriptions",
+      "chain": "rhc",
+      "tier": "ULTRA",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "subscriptions"
+        ],
+        "items": {
+          "subscriptions": [
+            "created_at",
+            "delivery_mode",
+            "filters",
+            "id",
+            "is_active",
+            "name",
+            "updated_at",
+            "webhook_url"
+          ]
+        }
+      }
+    },
+    {
+      "id": "POST /rhc/kol/first-touches/subscriptions",
+      "method": "POST",
+      "path": "/rhc/kol/first-touches/subscriptions",
+      "chain": "rhc",
+      "tier": "ULTRA",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [
+        "delivery_mode",
+        "filters",
+        "name",
+        "webhook_url"
+      ],
+      "response": {
+        "top": [
+          "chain",
+          "note",
+          "subscription",
+          "webhook_secret"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/kol/first-touches/subscriptions/{id}",
+      "method": "GET",
+      "path": "/rhc/kol/first-touches/subscriptions/{id}",
+      "chain": "rhc",
+      "tier": "ULTRA",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "subscription"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "PATCH /rhc/kol/first-touches/subscriptions/{id}",
+      "method": "PATCH",
+      "path": "/rhc/kol/first-touches/subscriptions/{id}",
+      "chain": "rhc",
+      "tier": "ULTRA",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [
+        "delivery_mode",
+        "filters",
+        "is_active",
+        "name",
+        "webhook_url"
+      ],
+      "response": {
+        "top": [
+          "chain",
+          "subscription"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "DELETE /rhc/kol/first-touches/subscriptions/{id}",
+      "method": "DELETE",
+      "path": "/rhc/kol/first-touches/subscriptions/{id}",
+      "chain": "rhc",
+      "tier": "ULTRA",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "deleted"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/kol/hot-tokens",
+      "method": "GET",
+      "path": "/rhc/kol/hot-tokens",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "window"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "count",
+          "tokens",
+          "window"
+        ],
+        "items": {
+          "tokens": [
+            "buy_eth",
+            "buys",
+            "deployer_tier",
+            "is_graduated",
+            "kols_buying",
+            "last_trade_at",
+            "launchpad",
+            "market_cap_usd",
+            "net_eth",
+            "sells",
+            "token_address",
+            "token_name",
+            "token_symbol"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/kol/leaderboard",
+      "method": "GET",
+      "path": "/rhc/kol/leaderboard",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "limit",
+          "period"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "count",
+          "leaderboard",
+          "period"
+        ],
+        "items": {
+          "leaderboard": [
+            "buy_eth",
+            "buys",
+            "kol_name",
+            "kol_twitter",
+            "last_trade_at",
+            "net_eth",
+            "sell_eth",
+            "sells",
+            "tokens_traded",
+            "trades"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/kol/tokens/hot",
+      "method": "GET",
+      "path": "/rhc/kol/tokens/hot",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": "/rhc/kol/hot-tokens",
+      "params": {
+        "path": [],
+        "query": [
+          "window"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "count",
+          "tokens",
+          "window"
+        ],
+        "items": {
+          "tokens": [
+            "buy_eth",
+            "buys",
+            "deployer_tier",
+            "is_graduated",
+            "kols_buying",
+            "last_trade_at",
+            "launchpad",
+            "market_cap_usd",
+            "net_eth",
+            "sells",
+            "token_address",
+            "token_name",
+            "token_symbol"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/kol/{wallet}",
+      "method": "GET",
+      "path": "/rhc/kol/{wallet}",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "wallet"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "evm_address",
+          "kol_name",
+          "kol_twitter",
+          "stats",
+          "trades"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/lp-events",
+      "method": "GET",
+      "path": "/rhc/lp-events",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "action",
+          "before",
+          "dex",
+          "limit",
+          "pool",
+          "provider",
+          "token"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "count",
+          "coverage",
+          "events",
+          "has_more",
+          "next_before"
+        ],
+        "items": {
+          "events": [
+            "active_liquidity_delta",
+            "active_share",
+            "amount0",
+            "amount1",
+            "block_number",
+            "block_time",
+            "dex",
+            "event",
+            "fee_tier",
+            "in_range",
+            "launchpad",
+            "liquidity",
+            "liquidity_delta",
+            "log_index",
+            "material",
+            "pool",
+            "provider",
+            "provider_deployer_tier",
+            "provider_is_token_deployer",
+            "provider_kol_name",
+            "quote_amount_raw",
+            "quote_token",
+            "share_of_reserves",
+            "tick_lower",
+            "tick_upper",
+            "token0",
+            "token1",
+            "token_address",
+            "token_amount_raw",
+            "token_decimals",
+            "token_name",
+            "token_symbol",
+            "tx_hash"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/price-alerts",
+      "method": "GET",
+      "path": "/rhc/price-alerts",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "alerts",
+          "chain"
+        ],
+        "items": {
+          "alerts": [
+            "baseline_mc_usd",
+            "created_at",
+            "delivery_mode",
+            "dip_fired_at",
+            "dip_low_mc_usd",
+            "drop_pct",
+            "expires_at",
+            "id",
+            "is_active",
+            "name",
+            "recovery_pct",
+            "status",
+            "token_address",
+            "token_symbol",
+            "updated_at",
+            "webhook_url"
+          ]
+        }
+      }
+    },
+    {
+      "id": "POST /rhc/price-alerts",
+      "method": "POST",
+      "path": "/rhc/price-alerts",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [
+        "delivery_mode",
+        "drop_pct",
+        "name",
+        "recovery_pct",
+        "token_address",
+        "webhook_url"
+      ],
+      "response": {
+        "top": [
+          "alert",
+          "chain",
+          "evaluation",
+          "note",
+          "webhook_secret"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/price-alerts/events",
+      "method": "GET",
+      "path": "/rhc/price-alerts/events",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "alert_id",
+          "event_type",
+          "limit",
+          "since"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "count",
+          "events"
+        ],
+        "items": {
+          "events": [
+            "alert_id",
+            "baseline_mc_usd",
+            "current_mc_usd",
+            "delivered",
+            "delivered_at",
+            "dip_low_mc_usd",
+            "drop_pct_actual",
+            "event_type",
+            "fired_at",
+            "id",
+            "recovery_pct_actual",
+            "token_address"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/price-alerts/{id}",
+      "method": "GET",
+      "path": "/rhc/price-alerts/{id}",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "alert",
+          "chain"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "PATCH /rhc/price-alerts/{id}",
+      "method": "PATCH",
+      "path": "/rhc/price-alerts/{id}",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [
+        "delivery_mode",
+        "is_active",
+        "name",
+        "webhook_url"
+      ],
+      "response": {
+        "top": [
+          "alert",
+          "chain"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "DELETE /rhc/price-alerts/{id}",
+      "method": "DELETE",
+      "path": "/rhc/price-alerts/{id}",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "deleted"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "POST /rhc/token/batch",
+      "method": "POST",
+      "path": "/rhc/token/batch",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [
+        "addresses",
+        "mints"
+      ],
+      "response": {
+        "top": [
+          "chain",
+          "found",
+          "requested",
+          "tokens"
+        ],
+        "items": {
+          "tokens": [
+            "address",
+            "decimals",
+            "deployer",
+            "fdv_usd",
+            "first_seen_at",
+            "found",
+            "graduated_at",
+            "hint",
+            "is_graduated",
+            "last_trade_time",
+            "launchpad",
+            "liquidity_usd",
+            "market_cap_usd",
+            "name",
+            "peak_mc_at",
+            "peak_mc_usd",
+            "price_usd",
+            "primary_dex",
+            "status",
+            "symbol"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/token/{address}",
+      "method": "GET",
+      "path": "/rhc/token/{address}",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": "/rhc/tokens/{address}",
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "decimals",
+          "deployer",
+          "deployer_address",
+          "deployer_other_tokens",
+          "drawdown_from_peak_pct",
+          "fdv_usd",
+          "first_seen_at",
+          "graduated_at",
+          "graduated_pool",
+          "is_graduated",
+          "kol_activity",
+          "last_trade_time",
+          "launchpad",
+          "liquidity_basis",
+          "liquidity_note",
+          "liquidity_usd",
+          "market_cap_usd",
+          "name",
+          "peak_mc_at",
+          "peak_mc_usd",
+          "pools",
+          "price_native",
+          "price_usd",
+          "primary_dex",
+          "primary_pool",
+          "symbol",
+          "token_address",
+          "token_age_minutes",
+          "total_supply_raw"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/tokens",
+      "method": "GET",
+      "path": "/rhc/tokens",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "after",
+          "asset_class",
+          "cursor",
+          "has_pool",
+          "launchpad",
+          "limit",
+          "max_age_days",
+          "min_liquidity_usd",
+          "min_mc_usd",
+          "since",
+          "sort"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "after",
+          "chain",
+          "count",
+          "cursor",
+          "has_more",
+          "next_after",
+          "next_cursor",
+          "next_since",
+          "note",
+          "scan",
+          "since",
+          "sort",
+          "tokens"
+        ],
+        "items": {
+          "tokens": [
+            "asset_class",
+            "decimals",
+            "deployer_address",
+            "deployer_tier",
+            "drawdown_from_peak_pct",
+            "fdv_usd",
+            "first_seen_at",
+            "is_graduated",
+            "last_trade_time",
+            "launchpad",
+            "liquidity_basis",
+            "liquidity_usd",
+            "market_cap_usd",
+            "name",
+            "peak_mc_at",
+            "peak_mc_usd",
+            "price_usd",
+            "primary_dex",
+            "primary_pool",
+            "symbol",
+            "token_address"
+          ]
+        }
+      }
+    },
+    {
+      "id": "POST /rhc/tokens/batch/buyer-quality",
+      "method": "POST",
+      "path": "/rhc/tokens/batch/buyer-quality",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [
+        "addresses",
+        "mints"
+      ],
+      "response": {
+        "top": [
+          "chain",
+          "coverage",
+          "max_addresses",
+          "requested",
+          "scored",
+          "tokens"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/tokens/hot",
+      "method": "GET",
+      "path": "/rhc/tokens/hot",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": "/rhc/kol/hot-tokens",
+      "params": {
+        "path": [],
+        "query": [
+          "window"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/tokens/locks",
+      "method": "GET",
+      "path": "/rhc/tokens/locks",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "before",
+          "cursor",
+          "family",
+          "kind",
+          "limit",
+          "locker",
+          "min_pct_of_supply",
+          "min_usd",
+          "recipient",
+          "sender",
+          "since",
+          "status",
+          "subject",
+          "token"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "coverage",
+          "locks",
+          "meta",
+          "pagination",
+          "stream"
+        ],
+        "items": {
+          "locks": [
+            "amount",
+            "amount_pct_of_supply",
+            "amount_raw",
+            "amount_unit",
+            "amount_usd",
+            "block_number",
+            "block_time",
+            "cancelable",
+            "cancelable_by_sender",
+            "cliff_amount",
+            "cliff_amount_raw",
+            "cliff_at",
+            "continuous",
+            "created_at",
+            "created_at_estimated",
+            "end_at",
+            "explorer",
+            "family",
+            "family_name",
+            "kind",
+            "layout_verified",
+            "lock_id",
+            "locked",
+            "locked_pct_of_supply",
+            "locked_raw",
+            "locked_usd",
+            "locker",
+            "locker_lock_id",
+            "locker_name",
+            "log_index",
+            "lp",
+            "name",
+            "next_unlock",
+            "perpetual",
+            "price_usd",
+            "provider",
+            "recipient",
+            "schedule",
+            "seconds_until_end",
+            "seconds_until_next_unlock",
+            "sender",
+            "start_at",
+            "status",
+            "subject",
+            "token",
+            "token_address",
+            "transferable",
+            "tx_hash",
+            "tx_sender",
+            "unlocked",
+            "unlocked_raw",
+            "withdrawn",
+            "withdrawn_raw"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/tokens/new",
+      "method": "GET",
+      "path": "/rhc/tokens/new",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": "/rhc/tokens?sort=newest",
+      "params": {
+        "path": [],
+        "query": [
+          "asset_class",
+          "limit",
+          "since"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "count",
+          "next_since",
+          "note",
+          "since",
+          "sort",
+          "tokens"
+        ],
+        "items": {
+          "tokens": [
+            "asset_class",
+            "deployer_address",
+            "deployer_tier",
+            "drawdown_from_peak_pct",
+            "fdv_usd",
+            "first_seen_at",
+            "is_graduated",
+            "last_trade_time",
+            "launchpad",
+            "liquidity_basis",
+            "liquidity_usd",
+            "market_cap_usd",
+            "name",
+            "peak_mc_at",
+            "peak_mc_usd",
+            "price_usd",
+            "primary_dex",
+            "primary_pool",
+            "symbol",
+            "token_address"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/tokens/recent",
+      "method": "GET",
+      "path": "/rhc/tokens/recent",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": "/rhc/tokens?sort=newest",
+      "params": {
+        "path": [],
+        "query": [
+          "limit",
+          "since"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "count",
+          "next_since",
+          "note",
+          "since",
+          "sort",
+          "tokens"
+        ],
+        "items": {
+          "tokens": [
+            "asset_class",
+            "deployer_address",
+            "deployer_tier",
+            "drawdown_from_peak_pct",
+            "fdv_usd",
+            "first_seen_at",
+            "is_graduated",
+            "last_trade_time",
+            "launchpad",
+            "liquidity_basis",
+            "liquidity_usd",
+            "market_cap_usd",
+            "name",
+            "peak_mc_at",
+            "peak_mc_usd",
+            "price_usd",
+            "primary_dex",
+            "primary_pool",
+            "symbol",
+            "token_address"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/tokens/trending",
+      "method": "GET",
+      "path": "/rhc/tokens/trending",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": "/rhc/kol/hot-tokens",
+      "params": {
+        "path": [],
+        "query": [
+          "window"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/tokens/unlocks",
+      "method": "GET",
+      "path": "/rhc/tokens/unlocks",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "family",
+          "kind",
+          "limit",
+          "min_pct_of_supply",
+          "min_usd",
+          "sort",
+          "token",
+          "within"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "coverage",
+          "meta",
+          "pagination",
+          "unlocks",
+          "window"
+        ],
+        "items": {
+          "unlocks": [
+            "amount",
+            "amount_pct_of_supply",
+            "amount_raw",
+            "amount_usd",
+            "event",
+            "in_seconds",
+            "lock",
+            "token",
+            "token_address",
+            "unlock_at",
+            "window_amount",
+            "window_amount_pct_of_supply",
+            "window_amount_raw",
+            "window_amount_usd"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/tokens/{address}",
+      "method": "GET",
+      "path": "/rhc/tokens/{address}",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "decimals",
+          "degraded_fields",
+          "deployer",
+          "deployer_address",
+          "deployer_identity_status",
+          "deployer_other_tokens",
+          "drawdown_from_peak_pct",
+          "fdv_usd",
+          "first_seen_at",
+          "graduated_at",
+          "graduated_pool",
+          "is_graduated",
+          "kol_activity",
+          "last_trade_time",
+          "launchpad",
+          "liquidity_basis",
+          "liquidity_note",
+          "liquidity_usd",
+          "market_cap_usd",
+          "name",
+          "peak_mc_at",
+          "peak_mc_usd",
+          "pools",
+          "price_age_seconds",
+          "price_is_stale",
+          "price_native",
+          "price_observed_at",
+          "price_updated_at",
+          "price_usd",
+          "primary_dex",
+          "primary_pool",
+          "symbol",
+          "token_address",
+          "token_age_minutes",
+          "total_supply_raw"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/tokens/{address}/bundle",
+      "method": "GET",
+      "path": "/rhc/tokens/{address}/bundle",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "bundle",
+          "chain",
+          "token_address",
+          "wallets"
+        ],
+        "items": {
+          "wallets": [
+            "has_sold",
+            "held_ratio",
+            "is_kol",
+            "likely_bot",
+            "rank",
+            "tokens_held",
+            "wallet",
+            "win_rate"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/tokens/{address}/buyer-quality",
+      "method": "GET",
+      "path": "/rhc/tokens/{address}/buyer-quality",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "cohort_selection",
+          "coverage",
+          "current_mc_usd",
+          "note",
+          "quality",
+          "token_address"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/tokens/{address}/candles",
+      "method": "GET",
+      "path": "/rhc/tokens/{address}/candles",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": [
+          "from",
+          "limit",
+          "tf",
+          "to"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "candles",
+          "chain",
+          "count",
+          "covered_from",
+          "from",
+          "timeframe",
+          "to",
+          "token_address",
+          "truncated"
+        ],
+        "items": {
+          "candles": [
+            "bucket_start",
+            "buy_count",
+            "close_liquidity_usd",
+            "close_mc_usd",
+            "close_price_usd",
+            "close_supply",
+            "dex",
+            "high_mc_usd",
+            "high_price_usd",
+            "low_mc_usd",
+            "low_price_usd",
+            "open_mc_usd",
+            "open_price_usd",
+            "pool_address",
+            "sell_count",
+            "trades",
+            "volume_buy_usd",
+            "volume_sell_usd",
+            "volume_usd"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/tokens/{address}/early-buyers",
+      "method": "GET",
+      "path": "/rhc/tokens/{address}/early-buyers",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": [
+          "limit"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "computed_at",
+          "count",
+          "early_buyers",
+          "holdings_verified",
+          "note",
+          "summary",
+          "token_address"
+        ],
+        "items": {
+          "early_buyers": [
+            "avg_entry_mc_usd",
+            "balance",
+            "bought_eth",
+            "first_buy_at",
+            "first_buy_block",
+            "position",
+            "rank",
+            "realized_eth",
+            "sold_eth",
+            "still_holding",
+            "trades",
+            "wallet"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/tokens/{address}/flow",
+      "method": "GET",
+      "path": "/rhc/tokens/{address}/flow",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": [
+          "window"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "attribution",
+          "chain",
+          "cohorts",
+          "sign_convention",
+          "token_address",
+          "totals",
+          "window"
+        ],
+        "items": {
+          "cohorts": [
+            "buy_eth",
+            "cohort",
+            "net_eth",
+            "sell_eth",
+            "traders",
+            "trades"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/tokens/{address}/holders",
+      "method": "GET",
+      "path": "/rhc/tokens/{address}/holders",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": [
+          "after",
+          "limit",
+          "offset"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "concentration",
+          "count",
+          "has_more",
+          "holder_growth",
+          "holders",
+          "reconciliation",
+          "source",
+          "token_address",
+          "unverified_reason",
+          "verified"
+        ],
+        "items": {
+          "holders": [
+            "balance",
+            "holder",
+            "is_burn",
+            "is_deployer",
+            "is_pool",
+            "last_block",
+            "share"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/tokens/{address}/kol-consensus",
+      "method": "GET",
+      "path": "/rhc/tokens/{address}/kol-consensus",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "consensus",
+          "current_mc_usd",
+          "current_price_usd",
+          "token_address"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/tokens/{address}/locks",
+      "method": "GET",
+      "path": "/rhc/tokens/{address}/locks",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": [
+          "family",
+          "limit",
+          "status",
+          "subject"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "coverage",
+          "locks",
+          "meta",
+          "summary",
+          "token",
+          "token_address"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/tokens/{address}/lp-events",
+      "method": "GET",
+      "path": "/rhc/tokens/{address}/lp-events",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": "/rhc/lp-events?token=",
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": [
+          "action",
+          "before",
+          "dex",
+          "limit"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "count",
+          "coverage",
+          "events",
+          "has_more",
+          "next_before"
+        ],
+        "items": {
+          "events": [
+            "active_liquidity_delta",
+            "active_share",
+            "amount0",
+            "amount1",
+            "block_number",
+            "block_time",
+            "dex",
+            "event",
+            "fee_tier",
+            "in_range",
+            "launchpad",
+            "liquidity",
+            "liquidity_delta",
+            "log_index",
+            "material",
+            "pool",
+            "provider",
+            "provider_deployer_tier",
+            "provider_is_token_deployer",
+            "provider_kol_name",
+            "quote_amount_raw",
+            "quote_token",
+            "share_of_reserves",
+            "tick_lower",
+            "tick_upper",
+            "token0",
+            "token1",
+            "token_address",
+            "token_amount_raw",
+            "token_decimals",
+            "token_name",
+            "token_symbol",
+            "tx_hash"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/tokens/{address}/peak-history",
+      "method": "GET",
+      "path": "/rhc/tokens/{address}/peak-history",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": [
+          "curve",
+          "window"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "current",
+          "curve",
+          "name",
+          "peak",
+          "symbol",
+          "token_address"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/tokens/{address}/risk",
+      "method": "GET",
+      "path": "/rhc/tokens/{address}/risk",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "assessment",
+          "capabilities",
+          "chain",
+          "checked_at",
+          "code_size",
+          "coverage",
+          "flags",
+          "is_contract",
+          "liquidity",
+          "owner",
+          "proxy",
+          "score",
+          "sellability",
+          "token_address"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/tokens/{address}/top-traders",
+      "method": "GET",
+      "path": "/rhc/tokens/{address}/top-traders",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": [
+          "limit",
+          "offset"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "attribution",
+          "chain",
+          "count",
+          "has_more",
+          "limit",
+          "metric",
+          "offset",
+          "token_address",
+          "traders"
+        ],
+        "items": {
+          "traders": [
+            "avg_trade_mc",
+            "buy_eth",
+            "dump_cohorts",
+            "early_buyer_rank",
+            "is_known_kol",
+            "kol_name",
+            "last_trade_at",
+            "likely_bot",
+            "net_eth",
+            "sell_eth",
+            "trader_eoa",
+            "trades",
+            "wallet_net_eth",
+            "wallet_tokens",
+            "win_rate"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/tokens/{address}/trades",
+      "method": "GET",
+      "path": "/rhc/tokens/{address}/trades",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": "/rhc/trades?token=",
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": [
+          "action",
+          "before",
+          "limit"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "count",
+          "has_more",
+          "next_before",
+          "trades"
+        ],
+        "items": {
+          "trades": [
+            "action",
+            "block_number",
+            "block_time",
+            "deployer_tier",
+            "dex",
+            "eth_amount",
+            "gas_price",
+            "is_kol",
+            "kol_name",
+            "launchpad",
+            "liquidity",
+            "log_index",
+            "mc_usd_at_trade",
+            "method_selector",
+            "pool",
+            "price_native",
+            "price_usd",
+            "router",
+            "token_address",
+            "trader",
+            "trader_eoa",
+            "tx_hash",
+            "tx_index"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/trades",
+      "method": "GET",
+      "path": "/rhc/trades",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "action",
+          "before",
+          "dex",
+          "limit",
+          "min_eth",
+          "token"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "count",
+          "has_more",
+          "next_before",
+          "trades"
+        ],
+        "items": {
+          "trades": [
+            "action",
+            "block_number",
+            "block_time",
+            "deployer_tier",
+            "dex",
+            "eth_amount",
+            "gas_price",
+            "is_kol",
+            "kol_name",
+            "launchpad",
+            "liquidity",
+            "log_index",
+            "mc_usd_at_trade",
+            "method_selector",
+            "pool",
+            "price_native",
+            "price_usd",
+            "router",
+            "token_address",
+            "trader",
+            "trader_eoa",
+            "tx_hash",
+            "tx_index"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/wallet-tracker/summary",
+      "method": "GET",
+      "path": "/rhc/wallet-tracker/summary",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "period",
+          "wallet"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "interval",
+          "period",
+          "stats_unavailable",
+          "wallets"
+        ],
+        "items": {
+          "wallets": [
+            "added_at",
+            "label",
+            "stats",
+            "wallet_address"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/wallet-tracker/trades",
+      "method": "GET",
+      "path": "/rhc/wallet-tracker/trades",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "action",
+          "before",
+          "limit",
+          "token",
+          "wallet"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "count",
+          "has_more",
+          "next_before",
+          "trades"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/wallet-tracker/watchlist",
+      "method": "GET",
+      "path": "/rhc/wallet-tracker/watchlist",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "count",
+          "limit",
+          "remaining",
+          "wallets"
+        ],
+        "items": {
+          "wallets": [
+            "added_at",
+            "label",
+            "wallet_address"
+          ]
+        }
+      }
+    },
+    {
+      "id": "POST /rhc/wallet-tracker/watchlist",
+      "method": "POST",
+      "path": "/rhc/wallet-tracker/watchlist",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [
+        "label",
+        "wallet_address"
+      ],
+      "response": {
+        "top": [],
+        "items": {}
+      }
+    },
+    {
+      "id": "PATCH /rhc/wallet-tracker/watchlist/{address}",
+      "method": "PATCH",
+      "path": "/rhc/wallet-tracker/watchlist/{address}",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": []
+      },
+      "body": [
+        "label"
+      ],
+      "response": {
+        "top": [
+          "chain",
+          "wallet"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "DELETE /rhc/wallet-tracker/watchlist/{address}",
+      "method": "DELETE",
+      "path": "/rhc/wallet-tracker/watchlist/{address}",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "removed"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/wallet/{address}",
+      "method": "GET",
+      "path": "/rhc/wallet/{address}",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "address",
+          "cache_hit",
+          "chain",
+          "derived",
+          "flags",
+          "holdings",
+          "recent_trades",
+          "stats",
+          "stats_unavailable",
+          "top_tokens"
+        ],
+        "items": {
+          "top_tokens": [
+            "holding_status",
+            "still_holding"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/wallet/{address}/funding",
+      "method": "GET",
+      "path": "/rhc/wallet/{address}/funding",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": [
+          "limit",
+          "offset"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "address",
+          "chain",
+          "chain_id",
+          "coverage",
+          "disclaimer",
+          "native_asset",
+          "pagination",
+          "shared_funders",
+          "status",
+          "summary"
+        ],
+        "items": {
+          "shared_funders": [
+            "connected_wallets",
+            "funder",
+            "funder_explorer_url",
+            "funder_label",
+            "service_funder",
+            "to_this_wallet"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/wallet/{address}/pnl",
+      "method": "GET",
+      "path": "/rhc/wallet/{address}/pnl",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "address",
+          "cache_hit",
+          "chain",
+          "closed_positions",
+          "notes",
+          "open_positions",
+          "pnl_curve",
+          "summary",
+          "window_days"
+        ],
+        "items": {
+          "closed_positions": [
+            "bought_eth",
+            "buy_count",
+            "first_trade",
+            "hold_minutes",
+            "last_trade",
+            "pnl_eth",
+            "result",
+            "roi_pct",
+            "sell_count",
+            "sold_eth",
+            "token_address",
+            "token_symbol"
+          ],
+          "pnl_curve": [
+            "cumulative_pnl",
+            "date",
+            "day_pnl",
+            "trades"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/wallet/{address}/positions",
+      "method": "GET",
+      "path": "/rhc/wallet/{address}/positions",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "address",
+          "chain",
+          "notes",
+          "positions",
+          "summary",
+          "window_days"
+        ],
+        "items": {
+          "positions": [
+            "avg_entry_price_eth",
+            "buys_in_position",
+            "cost_basis_eth",
+            "cost_basis_held_eth",
+            "cost_basis_not_held_eth",
+            "current_holding_value_eth",
+            "current_mc_usd",
+            "current_onchain_balance",
+            "current_price_eth",
+            "current_value_eth",
+            "external_inflow_amount",
+            "fifo_unmatched_amount",
+            "first_buy_at",
+            "held_known_amount",
+            "holding_status",
+            "holding_unverified_reason",
+            "is_graduated",
+            "last_buy_at",
+            "launchpad",
+            "liquidity_basis",
+            "liquidity_usd",
+            "realized_so_far_eth",
+            "token_address",
+            "token_amount",
+            "token_name",
+            "token_symbol",
+            "unrealized_eth",
+            "unrealized_known_eth",
+            "unrealized_pct"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/wallet/{address}/trades",
+      "method": "GET",
+      "path": "/rhc/wallet/{address}/trades",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": [
+          "action",
+          "before",
+          "limit",
+          "since",
+          "token"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "address",
+          "chain",
+          "count",
+          "has_more",
+          "next_before",
+          "trades"
+        ],
+        "items": {
+          "trades": [
+            "action",
+            "block_number",
+            "block_time",
+            "dex",
+            "eth_amount",
+            "launchpad",
+            "log_index",
+            "mc_usd_at_trade",
+            "method_selector",
+            "pool",
+            "price_native",
+            "price_usd",
+            "router",
+            "token_address",
+            "token_amount",
+            "token_name",
+            "token_symbol",
+            "tx_hash"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /signals",
+      "method": "GET",
+      "path": "/signals",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "description",
+          "docs",
+          "name",
+          "signals"
+        ],
+        "items": {
+          "signals": [
+            "methodology",
+            "name",
+            "performance_endpoint"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /signals/{name}/performance",
+      "method": "GET",
+      "path": "/signals/{name}/performance",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "name"
+        ],
+        "query": [
+          "history"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "as_of",
+          "base_rate",
+          "buckets",
+          "history",
+          "methodology",
+          "metric_type",
+          "note",
+          "outcome",
+          "signal",
+          "test_from",
+          "test_to",
+          "window_days"
+        ],
+        "items": {
+          "buckets": [
+            "base_rate",
+            "bucket",
+            "hit_rate",
+            "lift",
+            "sample_n"
+          ],
+          "history": [
+            "as_of",
+            "buckets"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /sniper/by-deployer/{wallet}",
+      "method": "GET",
+      "path": "/sniper/by-deployer/{wallet}",
+      "chain": "solana",
+      "tier": "ULTRA",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "wallet"
+        ],
+        "query": [
+          "limit"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "count",
+          "coverage",
+          "deployer",
+          "deploys"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /sniper/recent",
+      "method": "GET",
+      "path": "/sniper/recent",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "deployer_tier",
+          "limit",
+          "min_bond_rate",
+          "since",
+          "watchlist"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "count",
+          "coverage",
+          "data_age_seconds",
+          "deploys",
+          "watchlist_empty"
+        ],
+        "items": {
+          "deploys": [
+            "attribution_checked_at",
+            "attribution_status",
+            "confirmed_at",
+            "confirmed_on_chain",
+            "deployer_bond_rate",
+            "deployer_labeled_tokens",
+            "deployer_recent",
+            "deployer_runner_rate",
+            "deployer_tier",
+            "deployer_total_bonded",
+            "deployer_wallet",
+            "detected_at",
+            "detection_confirmed",
+            "detection_region",
+            "footprint",
+            "mint",
+            "name",
+            "signature",
+            "slot",
+            "symbol"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /sniper/watchlist",
+      "method": "GET",
+      "path": "/sniper/watchlist",
+      "chain": "solana",
+      "tier": "ULTRA",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "count",
+          "deployers",
+          "limit",
+          "remaining"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "POST /sniper/watchlist",
+      "method": "POST",
+      "path": "/sniper/watchlist",
+      "chain": "solana",
+      "tier": "ULTRA",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [
+        "label",
+        "wallet",
+        "wallets"
+      ],
+      "response": {
+        "top": [
+          "added",
+          "deployers",
+          "message"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "DELETE /sniper/watchlist/{wallet}",
+      "method": "DELETE",
+      "path": "/sniper/watchlist/{wallet}",
+      "chain": "solana",
+      "tier": "ULTRA",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "wallet"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "removed"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /status",
+      "method": "GET",
+      "path": "/status",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "checked_at",
+          "data_quality",
+          "services",
+          "status",
+          "uptime",
+          "verification"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /stream/sessions",
+      "method": "GET",
+      "path": "/stream/sessions",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "count",
+          "sessions"
+        ],
+        "items": {
+          "sessions": [
+            "channels",
+            "connected_at",
+            "id",
+            "messages_sent",
+            "remote_ip",
+            "service",
+            "tier"
+          ]
+        }
+      }
+    },
+    {
+      "id": "DELETE /stream/sessions/{id}",
+      "method": "DELETE",
+      "path": "/stream/sessions/{id}",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "evicted",
+          "id"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "POST /stream/token",
+      "method": "POST",
+      "path": "/stream/token",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "channels",
+          "dex_ws_url",
+          "expires_at",
+          "lifetime",
+          "named_subscriptions",
+          "next_refresh_at",
+          "rhc_token_prices",
+          "rotated",
+          "subscribe_example",
+          "token",
+          "token_prices",
+          "usage",
+          "ws_url"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "POST /token/batch",
+      "method": "POST",
+      "path": "/token/batch",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [
+        "mints"
+      ],
+      "response": {
+        "top": [
+          "as_of",
+          "count",
+          "degraded_fields",
+          "tokens"
+        ],
+        "items": {
+          "tokens": [
+            "age_seconds",
+            "blacklist_category",
+            "burn_detected",
+            "deployer",
+            "deployer_identity",
+            "fdv_usd",
+            "first_seen_at",
+            "freeze_authority_revoked",
+            "history_age_seconds",
+            "is_blacklisted",
+            "is_token_2022",
+            "kol_activity",
+            "last_trade_at",
+            "launch_cohort_size",
+            "launch_cohort_sol",
+            "launchpad",
+            "liquidity_to_mc_ratio",
+            "liquidity_usd",
+            "lp_burn_status",
+            "market_cap",
+            "mc_change_pct",
+            "mev_volume_pct",
+            "mint",
+            "mint_authority_revoked",
+            "price_age_seconds",
+            "price_is_stale",
+            "price_observed_at",
+            "price_sol",
+            "price_source",
+            "price_usd",
+            "primary_dex",
+            "primary_pool_address",
+            "token_supply_burn_detected",
+            "trades_24h",
+            "transfer_fee_bps",
+            "volume_24h_sol",
+            "volume_24h_usd",
+            "volume_usd",
+            "vwap_price_sol",
+            "vwap_price_usd"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /token/hot",
+      "method": "GET",
+      "path": "/token/hot",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": "/kol/tokens/hot",
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /token/trending",
+      "method": "GET",
+      "path": "/token/trending",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": "/kol/tokens/trending",
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /token/{mint}",
+      "method": "GET",
+      "path": "/token/{mint}",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "mint"
+        ],
+        "query": [
+          "include"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "as_of",
+          "buyer_quality",
+          "deployer_profile",
+          "include_errors",
+          "included",
+          "token"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /tokens",
+      "method": "GET",
+      "path": "/tokens",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "active_h",
+          "authority_revoked",
+          "deployer_tier",
+          "exclude_token2022",
+          "launchpad",
+          "limit",
+          "lp_burned",
+          "max_liq_mc_ratio",
+          "max_mc",
+          "max_mev_share_pct",
+          "mc_change_1h_max_pct",
+          "mc_change_1h_min_pct",
+          "min_liq",
+          "min_liq_mc_ratio",
+          "min_mc",
+          "min_volume_1h_usd",
+          "offset",
+          "primary_dex",
+          "sort",
+          "supply_burn"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "deprecations",
+          "filters",
+          "pagination",
+          "tokens"
+        ],
+        "items": {
+          "deprecations": [
+            "matches",
+            "param",
+            "replacement",
+            "status"
+          ],
+          "tokens": [
+            "authorities_revoked",
+            "deployer_tier",
+            "fdv_usd",
+            "is_token_2022",
+            "last_trade_time",
+            "launchpad",
+            "liquidity_to_mc_ratio",
+            "liquidity_usd",
+            "lp_burn_status",
+            "lp_burned",
+            "lp_burnt_pct",
+            "market_cap_usd",
+            "mc_change_1h_pct",
+            "mc_change_5m_pct",
+            "mev_share_pct",
+            "mint",
+            "name",
+            "organic_volume_1h_usd",
+            "price_usd",
+            "primary_dex",
+            "symbol",
+            "token_supply_burn_detected"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /tokens/almost-bonded",
+      "method": "GET",
+      "path": "/tokens/almost-bonded",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "authority_revoked",
+          "deployer_tier",
+          "launchpad",
+          "limit",
+          "max_age_minutes",
+          "max_progress",
+          "min_liq",
+          "min_progress",
+          "min_velocity_pct_per_min",
+          "sort"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "coverage",
+          "filters",
+          "note",
+          "returned",
+          "scan",
+          "tokens"
+        ],
+        "items": {
+          "tokens": [
+            "age_minutes",
+            "authorities_revoked",
+            "deployer_tier",
+            "eta_minutes",
+            "launchpad",
+            "liquidity_usd",
+            "market_cap_usd",
+            "mint",
+            "name",
+            "progress_pct",
+            "real_sol_reserves",
+            "stalled",
+            "symbol",
+            "velocity_pct_per_min"
+          ]
+        }
+      }
+    },
+    {
+      "id": "POST /tokens/batch/buyer-quality",
+      "method": "POST",
+      "path": "/tokens/batch/buyer-quality",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [
+        "mints"
+      ],
+      "response": {
+        "top": [
+          "cache_hits",
+          "count",
+          "coverage",
+          "tokens"
+        ],
+        "items": {
+          "tokens": [
+            "breakdown",
+            "cached_at",
+            "confidence",
+            "coverage",
+            "in_scope",
+            "mint",
+            "note",
+            "score",
+            "signal",
+            "signal_stats"
+          ]
+        }
+      }
+    },
+    {
+      "id": "POST /tokens/batch/risk",
+      "method": "POST",
+      "path": "/tokens/batch/risk",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [
+        "mints"
+      ],
+      "response": {
+        "top": [
+          "count",
+          "coverage",
+          "tokens"
+        ],
+        "items": {
+          "tokens": [
+            "as_of",
+            "assessment",
+            "band",
+            "code",
+            "coverage",
+            "dev",
+            "dev_status",
+            "error",
+            "factors",
+            "inputs",
+            "mint",
+            "retryable",
+            "risk_score",
+            "score_version",
+            "unavailable_inputs"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /tokens/fee-claims",
+      "method": "GET",
+      "path": "/tokens/fee-claims",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "actor",
+          "before",
+          "limit",
+          "min_sol",
+          "mint",
+          "recipient",
+          "since",
+          "social_platform",
+          "social_user_id",
+          "type"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "events",
+          "meta",
+          "pagination",
+          "stream"
+        ],
+        "items": {
+          "events": [
+            "actor",
+            "admin",
+            "amount",
+            "amount_raw",
+            "amount_usd",
+            "at",
+            "id",
+            "mint",
+            "payload",
+            "payouts",
+            "quote",
+            "recipient",
+            "shareholders",
+            "slot",
+            "social",
+            "tx_signature",
+            "type"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /tokens/locks",
+      "method": "GET",
+      "path": "/tokens/locks",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "before",
+          "cursor",
+          "include_estimated",
+          "kind",
+          "limit",
+          "min_pct_of_supply",
+          "min_usd",
+          "mint",
+          "program",
+          "recipient",
+          "sender",
+          "since",
+          "status"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "degraded_fields",
+          "locks",
+          "meta",
+          "pagination",
+          "stream"
+        ],
+        "items": {
+          "locks": [
+            "amount",
+            "amount_pct_of_supply",
+            "amount_per_period",
+            "amount_per_period_raw",
+            "amount_raw",
+            "amount_usd",
+            "can_topup",
+            "cancelable_by_recipient",
+            "cancelable_by_sender",
+            "cancelled_at",
+            "claimable",
+            "claimable_raw",
+            "cliff_amount",
+            "cliff_amount_raw",
+            "cliff_at",
+            "continuous",
+            "created_at",
+            "created_at_estimated",
+            "end_at",
+            "explorer",
+            "kind",
+            "lock_account",
+            "locked",
+            "locked_pct_of_supply",
+            "locked_raw",
+            "locked_usd",
+            "mint",
+            "name",
+            "next_unlock",
+            "period_seconds",
+            "perpetual",
+            "price_usd",
+            "program",
+            "provider",
+            "recipient",
+            "schedule",
+            "seconds_until_end",
+            "seconds_until_next_unlock",
+            "sender",
+            "start_at",
+            "status",
+            "token",
+            "transferable",
+            "tx_signature",
+            "unlocked",
+            "unlocked_raw",
+            "withdrawn",
+            "withdrawn_raw"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /tokens/search",
+      "method": "GET",
+      "path": "/tokens/search",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "limit",
+          "q"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "count",
+          "note",
+          "q",
+          "results"
+        ],
+        "items": {
+          "results": [
+            "last_trade_at",
+            "liquidity_usd",
+            "market_cap_usd",
+            "match",
+            "mint",
+            "name",
+            "primary_dex",
+            "symbol"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /tokens/surges",
+      "method": "GET",
+      "path": "/tokens/surges",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "before",
+          "days",
+          "deployer_tier",
+          "exclude_flags",
+          "kind",
+          "launchpad",
+          "limit",
+          "max_mc_usd",
+          "min_buys",
+          "min_mc_usd",
+          "mint",
+          "only_clean",
+          "since",
+          "stats",
+          "tier"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "definitions",
+          "events",
+          "filters",
+          "note",
+          "pagination",
+          "stats",
+          "stream"
+        ],
+        "items": {
+          "events": [
+            "age_seconds",
+            "baseline_mc_usd",
+            "baseline_source",
+            "birth_at",
+            "birth_source",
+            "bonding_progress_pct",
+            "deployer",
+            "deployer_tier",
+            "deployer_wallet",
+            "detail_url",
+            "dormant_hours",
+            "early_buyers",
+            "enrichment_available",
+            "fired_at",
+            "freeze_authority_revoked",
+            "id",
+            "is_bonded",
+            "is_token_2022",
+            "kind",
+            "kol",
+            "launchpad",
+            "liquidity_to_mc_ratio",
+            "liquidity_usd",
+            "market_cap_usd",
+            "mc_change_3m_pct",
+            "mc_multiple",
+            "mc_vs_prev_multiple",
+            "mint",
+            "mint_authority_revoked",
+            "name",
+            "outcome",
+            "pct_of_peak",
+            "peak_mc_usd",
+            "prev_mc_usd",
+            "price_usd",
+            "primary_dex",
+            "risk_flags",
+            "symbol",
+            "tape",
+            "tier"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /tokens/unlocks",
+      "method": "GET",
+      "path": "/tokens/unlocks",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "kind",
+          "limit",
+          "min_pct_of_supply",
+          "min_usd",
+          "mint",
+          "program",
+          "sort",
+          "within"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "meta",
+          "pagination",
+          "unlocks",
+          "window"
+        ],
+        "items": {
+          "unlocks": [
+            "amount",
+            "amount_pct_of_supply",
+            "amount_raw",
+            "amount_usd",
+            "event",
+            "in_seconds",
+            "lock",
+            "mint",
+            "token",
+            "unlock_at",
+            "window_amount",
+            "window_amount_pct_of_supply",
+            "window_amount_raw",
+            "window_amount_usd"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /tokens/{mint}/bundle",
+      "method": "GET",
+      "path": "/tokens/{mint}/bundle",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "mint"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "bundle",
+          "coverage",
+          "mint",
+          "wallets"
+        ],
+        "items": {
+          "wallets": [
+            "atomic",
+            "bot_confidence",
+            "has_sold",
+            "held_ratio",
+            "is_kol",
+            "kol_name",
+            "rank",
+            "tokens_held",
+            "wallet",
+            "win_rate"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /tokens/{mint}/buyer-quality",
+      "method": "GET",
+      "path": "/tokens/{mint}/buyer-quality",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "mint"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "breakdown",
+          "cached_at",
+          "confidence",
+          "coverage",
+          "mint",
+          "note",
+          "score",
+          "signal",
+          "signal_stats"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /tokens/{mint}/candles",
+      "method": "GET",
+      "path": "/tokens/{mint}/candles",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "mint"
+        ],
+        "query": [
+          "from",
+          "limit",
+          "tf",
+          "to"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "candles",
+          "count",
+          "covered_from",
+          "from",
+          "history_clamped",
+          "history_floor",
+          "history_outside_plan",
+          "mint",
+          "net_flow_included",
+          "timeframe",
+          "to",
+          "truncated"
+        ],
+        "items": {
+          "candles": [
+            "buy_count",
+            "buy_volume_usd",
+            "close",
+            "close_liquidity_usd",
+            "high",
+            "high_mc_usd",
+            "low",
+            "low_mc_usd",
+            "market_cap_usd",
+            "net_volume_usd",
+            "open",
+            "open_liquidity_usd",
+            "sell_count",
+            "sell_volume_usd",
+            "t",
+            "trades",
+            "volume_mev_usd",
+            "volume_usd"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /tokens/{mint}/cap-table",
+      "method": "GET",
+      "path": "/tokens/{mint}/cap-table",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "mint"
+        ],
+        "query": [
+          "limit"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "buyers",
+          "coverage",
+          "mint",
+          "summary"
+        ],
+        "items": {
+          "buyers": [
+            "bot_confidence",
+            "first_buy_at",
+            "first_buy_sol",
+            "first_sell_at",
+            "historical_pnl_sol",
+            "historical_tokens",
+            "historical_win_rate",
+            "is_bundle",
+            "is_kol",
+            "kol_name",
+            "rank",
+            "realized_pnl_sol",
+            "still_holding",
+            "total_sol_bought",
+            "total_sol_sold",
+            "wallet"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /tokens/{mint}/depth",
+      "method": "GET",
+      "path": "/tokens/{mint}/depth",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "mint"
+        ],
+        "query": [
+          "sizes"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "found",
+          "mint",
+          "note",
+          "pools",
+          "primary_pool",
+          "sizes_sol",
+          "sol_usd",
+          "universe",
+          "unsupported_pools"
+        ],
+        "items": {
+          "pools": [
+            "depth_available",
+            "dex",
+            "fee_pct",
+            "is_active",
+            "liquidity_usd",
+            "model",
+            "pool_address",
+            "pool_model",
+            "quote_mint",
+            "quotes",
+            "reserves_age_ms",
+            "source",
+            "spot_price_sol",
+            "to_move_price"
+          ],
+          "unsupported_pools": [
+            "dex",
+            "is_active",
+            "liquidity_usd",
+            "pool_address",
+            "pool_model",
+            "quote_mint",
+            "reason"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /tokens/{mint}/fee-shares",
+      "method": "GET",
+      "path": "/tokens/{mint}/fee-shares",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "mint"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "config",
+          "config_error",
+          "config_pda",
+          "distributions",
+          "history",
+          "meta",
+          "mint",
+          "quote",
+          "recent_distributions"
+        ],
+        "items": {
+          "recent_distributions": [
+            "actor",
+            "amount",
+            "amount_raw",
+            "amount_usd",
+            "at",
+            "shareholders",
+            "tx_signature"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /tokens/{mint}/flow",
+      "method": "GET",
+      "path": "/tokens/{mint}/flow",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "mint"
+        ],
+        "query": [
+          "window"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "buy_count",
+          "buy_sol",
+          "coverage",
+          "from",
+          "mint",
+          "net_sol",
+          "sell_count",
+          "sell_sol",
+          "total_trades",
+          "trades_per_wallet",
+          "unique_buyers",
+          "unique_sellers",
+          "unique_wallets",
+          "window"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /tokens/{mint}/holders",
+      "method": "GET",
+      "path": "/tokens/{mint}/holders",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "mint"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "as_of",
+          "concentration",
+          "count",
+          "deployer",
+          "disclosed",
+          "excluded",
+          "holders",
+          "mint",
+          "slot",
+          "source"
+        ],
+        "items": {
+          "excluded": [
+            "amount_raw",
+            "dex",
+            "owner",
+            "pct_of_supply",
+            "pool_address",
+            "reason",
+            "token_accounts"
+          ],
+          "holders": [
+            "amount",
+            "amount_raw",
+            "bot_confidence",
+            "early_buyer_rank",
+            "historical_win_rate",
+            "kol_name",
+            "labels",
+            "owner",
+            "pct_of_circulating",
+            "pct_of_supply",
+            "rank",
+            "token_accounts"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /tokens/{mint}/kol-consensus",
+      "method": "GET",
+      "path": "/tokens/{mint}/kol-consensus",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "mint"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "complete",
+          "consensus",
+          "current_mc_usd",
+          "current_price_usd",
+          "mint",
+          "total_kol_buyers",
+          "total_kol_sellers"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /tokens/{mint}/locks",
+      "method": "GET",
+      "path": "/tokens/{mint}/locks",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "mint"
+        ],
+        "query": [
+          "limit",
+          "program",
+          "status"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "locks",
+          "meta",
+          "mint",
+          "summary",
+          "token"
+        ],
+        "items": {
+          "locks": [
+            "amount",
+            "amount_pct_of_supply",
+            "amount_per_period",
+            "amount_per_period_raw",
+            "amount_raw",
+            "amount_usd",
+            "can_topup",
+            "cancelable_by_recipient",
+            "cancelable_by_sender",
+            "cancelled_at",
+            "claimable",
+            "claimable_raw",
+            "cliff_amount",
+            "cliff_amount_raw",
+            "cliff_at",
+            "continuous",
+            "created_at",
+            "created_at_estimated",
+            "end_at",
+            "explorer",
+            "kind",
+            "lock_account",
+            "locked",
+            "locked_pct_of_supply",
+            "locked_raw",
+            "locked_usd",
+            "mint",
+            "name",
+            "next_unlock",
+            "period_seconds",
+            "perpetual",
+            "price_usd",
+            "program",
+            "provider",
+            "recipient",
+            "schedule",
+            "seconds_until_end",
+            "seconds_until_next_unlock",
+            "sender",
+            "start_at",
+            "status",
+            "transferable",
+            "tx_signature",
+            "unlocked",
+            "unlocked_raw",
+            "withdrawn",
+            "withdrawn_raw"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /tokens/{mint}/peak-history",
+      "method": "GET",
+      "path": "/tokens/{mint}/peak-history",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "mint"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "found",
+          "mint",
+          "peak_history",
+          "token"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /tokens/{mint}/pools",
+      "method": "GET",
+      "path": "/tokens/{mint}/pools",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "mint"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "mint",
+          "pools",
+          "summary",
+          "universe"
+        ],
+        "items": {
+          "pools": [
+            "amm_id",
+            "dex",
+            "is_active",
+            "last_price_sol",
+            "last_swap_at",
+            "liquidity_usd",
+            "pool_address",
+            "quote_mint"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /tokens/{mint}/risk",
+      "method": "GET",
+      "path": "/tokens/{mint}/risk",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "mint"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "as_of",
+          "assessment",
+          "band",
+          "coverage",
+          "dev",
+          "dev_status",
+          "factors",
+          "inputs",
+          "mint",
+          "resolved_from",
+          "risk_score",
+          "score_version"
+        ],
+        "items": {
+          "factors": [
+            "detail",
+            "key",
+            "label",
+            "points",
+            "status"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /tokens/{mint}/top-traders",
+      "method": "GET",
+      "path": "/tokens/{mint}/top-traders",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "mint"
+        ],
+        "query": [
+          "limit",
+          "min_bought_sol",
+          "offset",
+          "sort",
+          "window_days"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "coverage",
+          "mint",
+          "sort",
+          "summary",
+          "traders",
+          "window_days"
+        ],
+        "items": {
+          "traders": [
+            "bot_confidence",
+            "bought_sol",
+            "buys",
+            "first_trade_at",
+            "held_value_sol",
+            "historical_pnl_sol",
+            "historical_tokens",
+            "historical_win_rate",
+            "is_alpha_tracked",
+            "is_kol",
+            "kol_name",
+            "last_trade_at",
+            "rank",
+            "realized_pnl_sol",
+            "roi",
+            "sells",
+            "sold_sol",
+            "still_holding",
+            "total_pnl_sol",
+            "trades",
+            "unrealized_pnl_sol",
+            "wallet"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /tokens/{mint}/trades",
+      "method": "GET",
+      "path": "/tokens/{mint}/trades",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "mint"
+        ],
+        "query": [
+          "action",
+          "cursor",
+          "limit",
+          "since",
+          "until",
+          "wallet"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "coverage",
+          "filters",
+          "has_more",
+          "history",
+          "mint",
+          "next_cursor",
+          "trades"
+        ],
+        "items": {
+          "trades": [
+            "action",
+            "block_time",
+            "early_buyer_rank",
+            "market_price_sol",
+            "market_price_usd",
+            "price_sol",
+            "price_usd",
+            "slot",
+            "sol_amount",
+            "token_amount",
+            "traded_at",
+            "tx_signature",
+            "wallet_address"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /tools/search",
+      "method": "GET",
+      "path": "/tools/search",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "category",
+          "limit",
+          "q"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "count",
+          "tools"
+        ],
+        "items": {
+          "tools": [
+            "average_rating",
+            "categories",
+            "health_score",
+            "logo_url",
+            "name",
+            "pricing_model",
+            "review_count",
+            "slug",
+            "tagline",
+            "url",
+            "website_url"
+          ]
+        }
+      }
+    },
+    {
+      "id": "POST /wallet-list/score",
+      "method": "POST",
+      "path": "/wallet-list/score",
+      "chain": "solana",
+      "tier": "ENTERPRISE",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [
+        "wallets"
+      ],
+      "response": {
+        "top": [
+          "as_of",
+          "cached",
+          "computed_now",
+          "count",
+          "max_live_compute",
+          "max_wallets",
+          "no_trades",
+          "not_computed",
+          "score_methodology",
+          "scored",
+          "wallets"
+        ],
+        "items": {
+          "wallets": [
+            "address",
+            "cache_age_seconds",
+            "cache_hit",
+            "computed_at",
+            "message",
+            "pnl",
+            "reputation",
+            "score",
+            "status"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /wallet-tracker/summary",
+      "method": "GET",
+      "path": "/wallet-tracker/summary",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "period",
+          "wallet"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "interval",
+          "period",
+          "wallets"
+        ],
+        "items": {
+          "wallets": [
+            "added_at",
+            "label",
+            "stats",
+            "wallet_address"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /wallet-tracker/trades",
+      "method": "GET",
+      "path": "/wallet-tracker/trades",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "action",
+          "before",
+          "before_slot",
+          "event_type",
+          "limit",
+          "order",
+          "wallet"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "count",
+          "events",
+          "next_cursor",
+          "next_cursor_slot",
+          "ordered_by"
+        ],
+        "items": {
+          "events": [
+            "action",
+            "block_time",
+            "counterparty",
+            "event_type",
+            "ingested_at",
+            "label",
+            "replayed",
+            "slot",
+            "sol_amount",
+            "timestamp",
+            "token_amount",
+            "token_mint",
+            "token_name",
+            "token_symbol",
+            "tx_signature",
+            "wallet_address"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /wallet-tracker/watchlist",
+      "method": "GET",
+      "path": "/wallet-tracker/watchlist",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "count",
+          "limit",
+          "remaining",
+          "wallets"
+        ],
+        "items": {
+          "wallets": [
+            "added_at",
+            "label",
+            "wallet_address"
+          ]
+        }
+      }
+    },
+    {
+      "id": "POST /wallet-tracker/watchlist",
+      "method": "POST",
+      "path": "/wallet-tracker/watchlist",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [
+        "label",
+        "wallet_address"
+      ],
+      "response": {
+        "top": [
+          "wallet"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "PATCH /wallet-tracker/watchlist/{address}",
+      "method": "PATCH",
+      "path": "/wallet-tracker/watchlist/{address}",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": []
+      },
+      "body": [
+        "label"
+      ],
+      "response": {
+        "top": [
+          "wallet"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "DELETE /wallet-tracker/watchlist/{address}",
+      "method": "DELETE",
+      "path": "/wallet-tracker/watchlist/{address}",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "removed"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "POST /wallet/batch/classify",
+      "method": "POST",
+      "path": "/wallet/batch/classify",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [
+        "wallets"
+      ],
+      "response": {
+        "top": [
+          "as_of",
+          "count",
+          "coverage",
+          "wallets"
+        ],
+        "items": {
+          "wallets": [
+            "address",
+            "bot_confidence",
+            "dump_cluster",
+            "is_bundler",
+            "is_dumper",
+            "is_kol",
+            "is_sniper",
+            "kol_name"
+          ]
+        }
+      }
+    },
+    {
+      "id": "POST /wallet/batch/trades",
+      "method": "POST",
+      "path": "/wallet/batch/trades",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [
+        "action",
+        "limit_per_wallet",
+        "since",
+        "wallets"
+      ],
+      "response": {
+        "top": [
+          "coverage",
+          "limit_per_wallet",
+          "next_since",
+          "since",
+          "wallets"
+        ],
+        "items": {
+          "wallets": [
+            "count",
+            "trades",
+            "wallet"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /wallet/{address}",
+      "method": "GET",
+      "path": "/wallet/{address}",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "address",
+          "coverage",
+          "degraded_fields",
+          "deployer_breakdown",
+          "derived",
+          "enrichment_unavailable",
+          "flags",
+          "recent_trades",
+          "stats",
+          "stats_unavailable",
+          "top_tokens",
+          "trading_style"
+        ],
+        "items": {
+          "recent_trades": [
+            "action",
+            "block_time",
+            "sol_amount",
+            "token_mint",
+            "token_symbol",
+            "traded_at",
+            "tx_signature"
+          ],
+          "top_tokens": [
+            "buys",
+            "current_mc_usd",
+            "last_traded_at",
+            "peak_mc_usd",
+            "realized_pnl_sol",
+            "sells",
+            "sol_in",
+            "sol_out",
+            "token_mint",
+            "token_symbol"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /wallet/{address}/flags",
+      "method": "GET",
+      "path": "/wallet/{address}/flags",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": [
+          "as_of",
+          "history"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "as_of",
+          "flagged",
+          "history",
+          "note",
+          "sources",
+          "wallet"
+        ],
+        "items": {
+          "history": [
+            "flags",
+            "snapshot_at",
+            "source"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /wallet/{address}/funding",
+      "method": "GET",
+      "path": "/wallet/{address}/funding",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": [
+          "limit",
+          "offset"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "address",
+          "chain",
+          "chain_id",
+          "coverage",
+          "disclaimer",
+          "native_asset",
+          "pagination",
+          "shared_funders",
+          "status",
+          "summary"
+        ],
+        "items": {
+          "shared_funders": [
+            "connected_wallets",
+            "funder",
+            "funder_explorer_url",
+            "funder_label",
+            "service_funder",
+            "to_this_wallet"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /wallet/{address}/holdings",
+      "method": "GET",
+      "path": "/wallet/{address}/holdings",
+      "chain": "solana",
+      "tier": "ULTRA",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": [
+          "limit",
+          "min_value_usd"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "address",
+          "cache_hit",
+          "coverage",
+          "holdings",
+          "sol_balance",
+          "summary",
+          "trade_window_days",
+          "ttl_seconds",
+          "verified_at"
+        ],
+        "items": {
+          "holdings": [
+            "amount",
+            "amount_raw",
+            "decimals",
+            "is_bonded",
+            "market_cap_usd",
+            "mint",
+            "name",
+            "price_usd",
+            "symbol",
+            "token_program",
+            "trade_derived_amount",
+            "transfer_delta",
+            "value_usd"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /wallet/{address}/pnl",
+      "method": "GET",
+      "path": "/wallet/{address}/pnl",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "address",
+          "cache_age_seconds",
+          "cache_hit",
+          "cache_invalidated",
+          "cache_validation",
+          "closed_positions",
+          "computed_at",
+          "notes",
+          "open_positions",
+          "pnl_curve",
+          "summary",
+          "ttl_seconds",
+          "window_days"
+        ],
+        "items": {
+          "closed_positions": [
+            "bought_sol",
+            "buy_count",
+            "first_trade",
+            "hold_minutes",
+            "last_trade",
+            "pnl_sol",
+            "result",
+            "roi_pct",
+            "sell_count",
+            "sold_sol",
+            "token_mint"
+          ],
+          "open_positions": [
+            "avg_entry_price_sol",
+            "buys_in_position",
+            "cost_basis_sol",
+            "current_price_sol",
+            "current_value_sol",
+            "first_buy_at",
+            "token_amount",
+            "token_mint",
+            "unrealized_pct",
+            "unrealized_sol"
+          ],
+          "pnl_curve": [
+            "cumulative_pnl",
+            "date",
+            "day_pnl",
+            "trades"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /wallet/{address}/positions",
+      "method": "GET",
+      "path": "/wallet/{address}/positions",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "address",
+          "cache_age_seconds",
+          "cache_hit",
+          "cache_invalidated",
+          "cache_validation",
+          "computed_at",
+          "positions",
+          "ttl_seconds"
+        ],
+        "items": {
+          "positions": [
+            "avg_entry_price_sol",
+            "buys_in_position",
+            "cost_basis_sol",
+            "current_price_sol",
+            "current_value_sol",
+            "first_buy_at",
+            "token_amount",
+            "token_mint",
+            "unrealized_pct",
+            "unrealized_sol"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /wallet/{address}/trades",
+      "method": "GET",
+      "path": "/wallet/{address}/trades",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": [
+          "action",
+          "cursor",
+          "limit",
+          "since",
+          "token_mint",
+          "until"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "address",
+          "coverage",
+          "filters",
+          "has_more",
+          "history",
+          "next_cursor",
+          "trades"
+        ],
+        "items": {
+          "trades": [
+            "action",
+            "block_time",
+            "market_price_sol",
+            "market_price_usd",
+            "price_sol",
+            "price_usd",
+            "sol_amount",
+            "token_amount",
+            "token_mint",
+            "traded_at",
+            "tx_signature"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /webhooks",
+      "method": "GET",
+      "path": "/webhooks",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "webhooks"
+        ],
+        "items": {
+          "webhooks": [
+            "consecutive_failures",
+            "created_at",
+            "delivery_summary",
+            "events",
+            "filters",
+            "id",
+            "is_active",
+            "last_delivered_at",
+            "url"
+          ]
+        }
+      }
+    },
+    {
+      "id": "POST /webhooks",
+      "method": "POST",
+      "path": "/webhooks",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [
+        "events",
+        "filters",
+        "url"
+      ],
+      "response": {
+        "top": [
+          "note",
+          "webhook"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "POST /webhooks/test",
+      "method": "POST",
+      "path": "/webhooks/test",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": []
+      },
+      "body": [
+        "webhook_id"
+      ],
+      "response": {
+        "top": [
+          "error",
+          "event",
+          "response_time_ms",
+          "status_code",
+          "success"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /webhooks/{id}",
+      "method": "GET",
+      "path": "/webhooks/{id}",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "recent_deliveries",
+          "webhook"
+        ],
+        "items": {
+          "recent_deliveries": [
+            "delivered_at",
+            "error",
+            "event_type",
+            "response_time_ms",
+            "status_code"
+          ]
+        }
+      }
+    },
+    {
+      "id": "PATCH /webhooks/{id}",
+      "method": "PATCH",
+      "path": "/webhooks/{id}",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "webhook"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "DELETE /webhooks/{id}",
+      "method": "DELETE",
+      "path": "/webhooks/{id}",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "id"
+        ],
+        "query": []
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "deleted"
+        ],
+        "items": {}
+      }
+    }
+  ]
+}

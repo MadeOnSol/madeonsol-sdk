@@ -1,0 +1,12 @@
+{
+  "sdk": "madeonsol-sdk",
+  "repo": "MadeOnSol/madeonsol-sdk",
+  "release_unit": "npm:madeonsol",
+  "chains": ["solana"],
+  "exclude": [
+    { "match": ["@alias"], "reason": "Path aliases (summary 'Alias of …') exist for customers who guess URLs; the SDK binds the canonical path, same handler." },
+    { "match": ["GET /exports"], "reason": "Documented ahead of its route (SPEC_TIER_OVERRIDES in openapi-spec.ts); bind once the route ships." },
+    { "match": ["GET /status"], "reason": "Public service-status page feed, not a data endpoint; SDK users read it on the status page." }
+  ],
+  "exclude_fields": []
+}

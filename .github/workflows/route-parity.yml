@@ -17,3 +17,8 @@ jobs:
           node-version: "20"
       - name: Check SDK paths against the live API
         run: node scripts/route-parity-check.mjs
+      # Pinned API contract (sdk-contract/, synced from the monorepo with
+      # `node scripts/sync-sdk-contract.mjs <this-repo-dir>`): fails when the
+      # SDK lacks an operation or critical response field its policy requires.
+      - name: Check SDK against the pinned MadeOnSol API contract
+        run: node sdk-contract/check-sdk-contract.mjs
