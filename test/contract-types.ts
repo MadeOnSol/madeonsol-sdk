@@ -29,6 +29,7 @@ import type {
   TokenSearchResponse,
   WalletBatchTradesResponse,
   WalletFlagsResponse,
+  WalletFundingResponse,
   WalletListScoreResponse,
   WalletPositionsResponse,
   WalletTrackerTradesResponse,
@@ -200,3 +201,23 @@ export const scoreList = {
   ],
   count: 1, scored: 0, cached: 0, computed_now: 0, no_trades: 0, not_computed: 1, max_wallets: 200, max_live_compute: 25, score_methodology: "m", as_of: "t",
 } satisfies WalletListScoreResponse;
+
+// GET /wallet/{address}/funding (wallet-funding.ts getFundingConnections + direct_funding)
+const link = { asset: "native", symbol: "SOL", decimals: 9, amount_raw: "1500000000", amount: "1.5", transfer_count: 1, first_seen: "t", last_seen: "t", transactions: [{ tx: "S", explorer_url: "https://solscan.io/tx/S" }] };
+export const funding = {
+  chain: "solana", chain_id: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", native_asset: "SOL", address: "W", status: "ok", summary: "s",
+  shared_funders: [{
+    funder: "F", funder_explorer_url: "u", funder_label: null, service_funder: false,
+    to_this_wallet: [link],
+    connected_wallets: [{ address: "W2", explorer_url: "u", tracked_as: ["kol"], transfers: [{ ...link, symbol: null, decimals: null, amount: null }] }],
+  }],
+  pagination: { limit: 10, offset: 0, total: 1, has_more: false },
+  coverage: {
+    collection_enabled: true, mode: "on", heartbeat_at: "t", collector_current: true, monitoring_started_at: "t",
+    last_committed_position: "412345678", last_committed_at: "t",
+    tracked_intervals: [{ source: "kol", tracked_since: "t", tracked_until: null }],
+    known_gaps: [], supported_transfer_types: ["native"], unsupported_transfer_types: ["spl"], recovery: null, history: "h",
+  },
+  direct_funding: { observed: false, coverage: "forward_only", coverage_explanation: "e", observation_started_at: null, note: "n" },
+  disclaimer: "d",
+} satisfies WalletFundingResponse;

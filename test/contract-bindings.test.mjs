@@ -83,6 +83,14 @@ test("wallet.batchTrades → POST /wallet/batch/trades with the body as given", 
   assert.equal(r.next_since, 1);
 });
 
+test("wallet.funding → GET /wallet/{address}/funding?limit=&offset=", async () => {
+  await client().wallet.funding("W", { limit: 5, offset: 10 });
+  assert.equal(calls[0].method, "GET");
+  assert.equal(calls[0].url.pathname, "/api/v1/wallet/W/funding");
+  assert.equal(calls[0].url.searchParams.get("limit"), "5");
+  assert.equal(calls[0].url.searchParams.get("offset"), "10");
+});
+
 test("wallet.scoreList → POST /wallet-list/score { wallets }", async () => {
   await client().wallet.scoreList(["A"]);
   assert.equal(calls[0].method, "POST");

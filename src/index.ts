@@ -5455,7 +5455,7 @@ export interface WalletFlagsResponse {
   sources: Record<WalletFlagSource, WalletFlagSnapshot | null>;
   /** Only with `history: true`. */
   history?: { source: string; flags: Record<string, unknown>; snapshot_at: string }[];
-  /** Funding evidence block, when that feature is on for your tier. Opaque here: the dedicated funding endpoint is not bound by this SDK yet. */
+  /** Funding evidence block, when that feature is on for your tier. Typed in full by `client.wallet.funding()`. */
   funding?: Record<string, unknown>;
   note: string;
   _rid?: string;
@@ -5534,6 +5534,86 @@ export interface WalletListScoreResponse {
   max_live_compute: number;
   score_methodology: string;
   as_of: string;
+  _rid?: string;
+}
+
+/** `client.wallet.funding()` params — `GET /wallet/{address}/funding`. */
+export interface WalletFundingParams {
+  /** Shared funders per page: 1–20, default 10. */
+  limit?: number;
+  /** 0–100, default 0. */
+  offset?: number;
+}
+
+/** Aggregated transfers of one asset from a funder to a wallet. Amounts are raw base-unit STRINGS (u64/u256-safe). */
+export interface FundingTransferLink {
+  asset: string;
+  symbol: string | null;
+  decimals: number | null;
+  /** Raw base units, as a decimal string. */
+  amount_raw: string;
+  /** Human amount as a decimal string; null when decimals are unknown. */
+  amount: string | null;
+  transfer_count: number;
+  first_seen: string;
+  last_seen: string;
+  transactions: { tx: string; explorer_url: string }[];
+}
+
+/** An address that funded this wallet AND other tracked wallets. */
+export interface SharedFunder {
+  funder: string;
+  funder_explorer_url: string;
+  funder_label: { label: string; category: string; verified: boolean } | null;
+  /** Known exchange/service: common funding, not a connection signal. */
+  service_funder: boolean;
+  to_this_wallet: FundingTransferLink[];
+  connected_wallets: { address: string; explorer_url: string; tracked_as: string[]; transfers: FundingTransferLink[] }[];
+}
+
+export type FundingStatus = "ok" | "partial_coverage" | "not_tracked" | "collection_disabled" | "collection_stale" | "not_started";
+
+/**
+ * `GET /wallet/{address}/funding` (PRO+). Evidence of a funding connection — not
+ * proof of common ownership. Forward-looking coverage from monitoring start;
+ * SOL-only on Solana. A 503 `feature_disabled` / `funding_data_unavailable` is
+ * never an empty result.
+ */
+export interface WalletFundingResponse {
+  chain: string;
+  /** CAIP-2 chain id, e.g. "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp". */
+  chain_id: string;
+  native_asset: string;
+  address: string;
+  status: FundingStatus;
+  summary: string;
+  shared_funders: SharedFunder[];
+  pagination: { limit: number; offset: number; total: number; has_more: boolean };
+  /** Collection state needed to read an empty answer (monitoring start, heartbeat, tracked intervals, known gaps…). */
+  coverage: {
+    collection_enabled: boolean;
+    mode: string;
+    heartbeat_at: string | null;
+    collector_current: boolean;
+    monitoring_started_at: string | null;
+    last_committed_position: string | null;
+    last_committed_at: string | null;
+    tracked_intervals: { source: string; tracked_since: string; tracked_until: string | null }[];
+    known_gaps: Record<string, unknown>[];
+    supported_transfer_types: string[];
+    unsupported_transfer_types: string[];
+    recovery: string | null;
+    history: string;
+    [key: string]: unknown;
+  };
+  /**
+   * "Where was this wallet funded from?" — direct funding facts (PRO). Absent
+   * when that read degraded. Loosely typed: its fact objects carry a
+   * `relationships` block (cross-wallet counts) only for ULTRA+ keys; it is
+   * redacted below ULTRA.
+   */
+  direct_funding?: { observed: boolean; [key: string]: unknown };
+  disclaimer: string;
   _rid?: string;
 }
 
@@ -6753,6 +6833,20 @@ class WalletClient {
       this._baseUrl,
       `/wallet/${encodeURIComponent(address)}/flags`,
       params as Record<string, string | boolean | undefined>,
+    ));
+  }
+
+  /**
+   * Shared-funder evidence (`GET /wallet/{address}/funding`): addresses that sent
+   * a qualifying SOL transfer to this wallet AND to other tracked wallets, with
+   * the supporting transactions, plus `direct_funding`. Amounts are raw strings.
+   * **PRO+**; `relationships` counts inside `direct_funding` are ULTRA+.
+   */
+  funding(address: string, params?: WalletFundingParams): Promise<WalletFundingResponse> {
+    return this._get(buildUrl(
+      this._baseUrl,
+      `/wallet/${encodeURIComponent(address)}/funding`,
+      params as Record<string, number | undefined>,
     ));
   }
 
