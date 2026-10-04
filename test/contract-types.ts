@@ -6,6 +6,7 @@ import type {
   AlphaLinkedResponse,
   CandlesResponse,
   CoordinationHistoryResponse,
+  DeployerActivityResponse,
   DeployerAlertStats,
   DeployerProfileResponse,
   DeployerStats,
@@ -221,3 +222,42 @@ export const funding = {
   direct_funding: { observed: false, coverage: "forward_only", coverage_explanation: "e", observation_started_at: null, note: "n" },
   disclaimer: "d",
 } satisfies WalletFundingResponse;
+
+// GET /deployer-hunter/{wallet}/activity (2026-10-04): a PRO page (no identity
+// block, fee payer only as booleans) and the ULTRA identity block.
+const famCov = {
+  source: "token_trades (wallet = token deployer)", retention: "r", scope: "s", truncated: false, loaded: true,
+  complete: true, complete_from: "2026-09-04T12:00:00.000Z", archive_required_before: null, boundary_known: true,
+};
+export const deployerActivityPro: DeployerActivityResponse = {
+  wallet: "W", is_deployer: true,
+  deployer: { tier: "cold", first_deploy_at: "2026-01-01T00:00:00Z", last_deploy_at: "2026-10-04T00:00:00Z" },
+  plan: {
+    entitlement: "pro", window_days: 30, max_limit: 100,
+    history: {
+      requested: { from: "2026-09-04T12:00:00.000Z", to: "2026-10-04T12:00:00.000Z", source: "plan_default" },
+      effective: { from: "2026-09-04T12:00:00.000Z", to: "2026-10-04T12:00:00.000Z", clamped: false, max_days: 30 },
+      online: { from: "2026-09-04T12:00:00.000Z", to: "2026-10-04T12:00:00.000Z", served: true },
+      archive_only: null,
+    },
+  },
+  window: { since: "2026-09-04T12:00:00.000Z", until: "2026-10-04T12:00:00.000Z", max_days: 30, applies_to: "event_time" },
+  events: [
+    { id: "launch:M", type: "launch", at: "2026-10-03T10:00:00Z", time_basis: "ingest", mint: "M", name: "One", symbol: "ONE", launchpad: "pumpfun", bonded_at: null,
+      fee_payer_is_creator: false, external_fee_payer: true, dev_buy_sol: 1.5, dev_buy_tokens: 1000, dev_buy_supply_pct: 2.1 },
+    { id: "dev_trade:s:M:sell", type: "dev_sell", at: "2026-10-03T11:00:00.000Z", time_basis: "ingest", mint: "M", own_token: true, sol: 2.5, tokens: 5000, price_usd: null, tx: "s" },
+    { id: "creator_transferred:t:0", type: "creator_transferred", at: "2026-10-02T12:00:00Z", time_basis: "chain", mint: "M", from: "W", to: "C", direction: "out", initiated_by: "creator", tx: "t" },
+    { id: "fee_claim:c:1", type: "fee_claim", at: "2026-10-03T12:00:00Z", time_basis: "chain", kind: "direct", mint: null, amount_raw: "250000000", quote_mint: "So11111111111111111111111111111111111111112", tx: "c" },
+    { id: "funding_in:D:native", type: "funding_in", at: "2026-10-01T09:00:00Z", time_basis: "chain_or_ingest", source: "D", asset: "native", amount_raw: "3000000000", transfer_count: 2,
+      first_at: "2026-07-06T12:00:00.000Z", last_at: "2026-10-01T09:00:00Z", sample_tx_ids: ["f1"], aggregate: true },
+    { id: "capital_out:E:native", type: "capital_out", at: "2026-10-01T13:00:00Z", time_basis: "chain", recipient: "E", asset: "native", amount_raw: "1", decimals: 9, transfer_count: 1,
+      first_at: "2026-10-01T13:00:00Z", last_at: "2026-10-01T13:00:00Z", first_tx: "c1", aggregate: true },
+  ],
+  pagination: { limit: 50, requested_limit: 50, limit_capped: false, next_cursor: null, has_more: false },
+  coverage: { status: "observed", families: { dev_trades: famCov, launches: famCov }, future_events_dropped: 0, note: "n" },
+};
+export const deployerActivityUltraIdentity: DeployerActivityResponse["identity"] = {
+  status: "not_available", reason: "identity_stitching_not_released", note: "n",
+};
+export const deployerActivityNonDeployer: DeployerActivityResponse["coverage"]["families"][string] = { ...famCov, skipped_reason: "no_attributed_launch" };
+

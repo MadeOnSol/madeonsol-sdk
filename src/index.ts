@@ -1976,6 +1976,113 @@ export interface DeployerRewardsResponse {
   coverage: { payouts_since: string; direct_claims_window_days: number; note: string };
 }
 
+export type DeployerActivityEventType =
+  | "launch" | "dev_buy" | "dev_sell" | "creator_transferred" | "fee_claim" | "funding_in" | "capital_out";
+
+/**
+ * One event of a deployer's activity timeline. Fields present depend on
+ * `type`; addresses are raw facts of the concrete event, never identity claims.
+ */
+export interface DeployerActivityEvent {
+  id:          string;
+  type:        DeployerActivityEventType;
+  /** Time of the event itself (the window applies to this). */
+  at:          string;
+  time_basis:  "chain" | "ingest" | "chain_or_ingest";
+  mint?:       string | null;
+  name?:       string | null;
+  symbol?:     string | null;
+  launchpad?:  string | null;
+  bonded_at?:  string | null;
+  /** launch: whether the creator paid the create fee (null = unknown). The payer address is never in this response. */
+  fee_payer_is_creator?: boolean | null;
+  external_fee_payer?:   boolean | null;
+  dev_buy_sol?:          number | null;
+  dev_buy_tokens?:       number | null;
+  dev_buy_supply_pct?:   number | null;
+  own_token?:  boolean;
+  sol?:        number | null;
+  tokens?:     number | null;
+  price_usd?:  number | null;
+  first_at?:   string | null;
+  last_at?:    string | null;
+  aggregate?:  boolean;
+  from?:       string | null;
+  to?:         string | null;
+  direction?:  "in" | "out";
+  initiated_by?: "creator" | "platform_admin" | "other_signer" | "unknown";
+  tx?:         string;
+  kind?:       "direct" | "social";
+  amount_raw?: string | null;
+  quote_mint?: string | null;
+  source?:     string;
+  recipient?:  string;
+  asset?:      string;
+  decimals?:   number | null;
+  transfer_count?: number;
+  sample_tx_ids?:  string[];
+  first_tx?:   string | null;
+}
+
+export interface DeployerActivityFamilyCoverage {
+  source:      string;
+  retention:   string;
+  scope?:      string;
+  truncated:   boolean;
+  loaded:      boolean;
+  /** false: part of the window lies outside the online store (trade months only in the archive), or the boundary is unknown. */
+  complete:    boolean;
+  /** Earliest instant the online store answers this family completely. */
+  complete_from: string | null;
+  /** Before this instant events exist only in the archive (not served yet); null when the window does not cross it. */
+  archive_required_before: string | null;
+  boundary_known: boolean;
+  /** Set when the family was not queried because it cannot apply (a wallet with no attributed launch has no dev trades). */
+  skipped_reason?: "no_attributed_launch";
+}
+
+export interface DeployerActivityRange { from: string | null; to: string | null }
+
+/** Requested vs online vs archive-only history (archive reads are a planned follow-up). */
+export interface DeployerActivityHistoryPlan {
+  requested:    DeployerActivityRange & { source: "since_param" | "plan_default" };
+  effective:    DeployerActivityRange & { clamped: boolean; max_days: number | null };
+  online:       DeployerActivityRange & { served: boolean };
+  archive_only: (DeployerActivityRange & { served: boolean; reason: "archive_reads_not_enabled" }) | null;
+}
+
+/**
+ * GET /deployer-hunter/{wallet}/activity — PRO+, KEYED (v1) only. Feature-flagged
+ * server-side (503 `feature_disabled` until enabled).
+ */
+export interface DeployerActivityResponse {
+  wallet:      string;
+  is_deployer: boolean;
+  deployer:    { tier: string | null; first_deploy_at: string | null; last_deploy_at: string | null } | null;
+  plan:        { entitlement: "pro" | "ultra" | "business"; window_days: number | null; max_limit: number; history: DeployerActivityHistoryPlan };
+  window:      { since: string | null; until: string; max_days: number | null; applies_to: "event_time" };
+  events:      DeployerActivityEvent[];
+  pagination:  { limit: number; requested_limit: number; limit_capped: boolean; next_cursor: string | null; has_more: boolean };
+  coverage: {
+    status:   "observed" | "partial";
+    families: Record<string, DeployerActivityFamilyCoverage>;
+    future_events_dropped: number;
+    note:     string;
+  };
+  /** ULTRA/BUSINESS only, absent on PRO. Currently always not_available. */
+  identity?: { status: "not_available"; reason: "identity_stitching_not_released"; note: string };
+}
+
+export interface DeployerActivityParams {
+  /** Clamped server-side to 100 (PRO, ULTRA) or 500 (BUSINESS). */
+  limit?:  number;
+  cursor?: string;
+  /** Requested window start (ISO 8601); clamped to the plan window. */
+  since?:  string;
+  /** Comma list of event types. */
+  types?:  string;
+}
+
 // ─── Alpha wallet intelligence types ─────────────────────────────────────────
 
 export type AlphaSort = "win_rate" | "pnl" | "roi";
@@ -6465,6 +6572,27 @@ class DeployerClient {
    */
   deployerRewards(wallet: string): Promise<DeployerRewardsResponse> {
     return this._fetch(buildUrl(this._baseUrl, `/deployer-hunter/${encodeURIComponent(wallet)}/rewards`));
+  }
+
+  /**
+   * A wallet's deployer activity as ONE newest-first timeline: launches, its own
+   * dev buys/sells, creator transfers, fee claims, funding in and capital out.
+   * The window applies to each EVENT's own time (PRO 30 d, ULTRA 365 d, BUSINESS
+   * unbounded; page clamped to 100 / 100 / 500, echoed in `plan`). History is
+   * online-only for now: check `coverage.families.<f>.complete`,
+   * `archive_required_before` and `plan.history.archive_only` before reading an
+   * empty range as "nothing happened". PRO responses never carry an identity
+   * block or a fee-payer address; ULTRA/BUSINESS `identity` is `not_available`
+   * until identity stitching is released. Paginate with `next_cursor`.
+   * @param wallet Wallet address (deployer or not: `is_deployer` says which).
+   * @param opts Optional: limit, cursor, since (ISO 8601), types (comma list).
+   */
+  deployerActivity(wallet: string, opts?: DeployerActivityParams): Promise<DeployerActivityResponse> {
+    return this._fetch(buildUrl(
+      this._baseUrl,
+      `/deployer-hunter/${encodeURIComponent(wallet)}/activity`,
+      opts as Record<string, string | number | undefined>,
+    ));
   }
 }
 

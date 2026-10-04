@@ -2,8 +2,8 @@
   "schema": 1,
   "source": "MadeOnSol/madeonsol src/lib/openapi-spec.ts (scripts/generate-sdk-contract.mjs)",
   "api_version": "1.20.0",
-  "contract_hash": "33cf7324e3d794e7c1f5c3c7feafa8244e48ab1a39d4713752b6ba47ae18fefb",
-  "operation_count": 197,
+  "contract_hash": "81433a0747603c4c5e587c3324c32fc306244e0aef1f3d244b5d8c5cd844494f",
+  "operation_count": 198,
   "operations": [
     {
       "id": "GET /alpha/leaderboard",
@@ -610,6 +610,7 @@
       "body": [],
       "response": {
         "top": [
+          "capital_intelligence",
           "coverage",
           "deployer",
           "funding",
@@ -646,6 +647,79 @@
             "reply_count",
             "symbol",
             "usd_market_cap"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /deployer-hunter/{wallet}/activity",
+      "method": "GET",
+      "path": "/deployer-hunter/{wallet}/activity",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "wallet"
+        ],
+        "query": [
+          "cursor",
+          "limit",
+          "since",
+          "types"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "coverage",
+          "deployer",
+          "events",
+          "identity",
+          "is_deployer",
+          "pagination",
+          "plan",
+          "wallet",
+          "window"
+        ],
+        "items": {
+          "events": [
+            "aggregate",
+            "amount_raw",
+            "asset",
+            "at",
+            "bonded_at",
+            "decimals",
+            "dev_buy_sol",
+            "dev_buy_supply_pct",
+            "dev_buy_tokens",
+            "direction",
+            "external_fee_payer",
+            "fee_payer_is_creator",
+            "first_at",
+            "first_tx",
+            "from",
+            "id",
+            "initiated_by",
+            "kind",
+            "last_at",
+            "launchpad",
+            "mint",
+            "name",
+            "own_token",
+            "price_usd",
+            "quote_mint",
+            "recipient",
+            "sample_tx_ids",
+            "sol",
+            "source",
+            "symbol",
+            "time_basis",
+            "to",
+            "tokens",
+            "transfer_count",
+            "tx",
+            "type"
           ]
         }
       }
