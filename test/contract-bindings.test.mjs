@@ -105,3 +105,16 @@ test("kol.scoutLeaderboard / coordinationHistory paths unchanged", async () => {
   assert.equal(calls[0].url.pathname, "/api/v1/kol/scouts/leaderboard");
   assert.equal(calls[1].url.pathname, "/api/v1/kol/coordination/history");
 });
+
+test("deployer.deployerActivity → GET /deployer-hunter/{wallet}/activity with limit/cursor/since/types", async () => {
+  nextBody = { wallet: "W", is_deployer: true, events: [], pagination: { next_cursor: null, has_more: false } };
+  const r = await client().deployer.deployerActivity("W", { limit: 200, cursor: "abc", since: "2026-09-01T00:00:00Z", types: "launch,dev_sell" });
+  assert.equal(calls[0].method, "GET");
+  assert.equal(calls[0].url.pathname, "/api/v1/deployer-hunter/W/activity");
+  assert.equal(calls[0].url.searchParams.get("limit"), "200");
+  assert.equal(calls[0].url.searchParams.get("cursor"), "abc");
+  assert.equal(calls[0].url.searchParams.get("since"), "2026-09-01T00:00:00Z");
+  assert.equal(calls[0].url.searchParams.get("types"), "launch,dev_sell");
+  assert.equal(r.is_deployer, true);
+});
+
