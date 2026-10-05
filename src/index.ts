@@ -2681,7 +2681,9 @@ export interface TokenHoldersResponse {
 /* ── Token locks & vesting (Streamflow / Jupiter Lock / Bonfida) — GET /tokens/{mint}/locks, /tokens/locks, /tokens/unlocks ── */
 
 /** Locker program a contract lives under. LP locks are NOT covered (token / vesting locks only). */
-export type TokenLockProgram = "streamflow" | "jupiter_lock" | "bonfida_vesting";
+export type TokenLockProgram = "streamflow" | "jupiter_lock" | "bonfida_vesting" | "smithii_vesting" | "sablier_lockup";
+/** sablier_lockup stream-NFT holder proof: current = recipient proven by the latest read; lost_proof = recipient unknown, last_proven_holder is evidence; never_proven; burned = stream NFT burned, no recipient; anomaly = fail closed. */
+export type TokenLockHolderStatus = "current" | "lost_proof" | "never_proven" | "burned" | "anomaly";
 /** `lock` = whole amount released at one date; `vesting` = cliff and/or periodic release. */
 export type TokenLockKind = "lock" | "vesting";
 /** Contract status, derived at request time from the on-chain schedule + withdrawn/cancelled state. */
@@ -2757,7 +2759,14 @@ export interface TokenLock {
   mint: string;
   /** Creator / locker. Bonfida has none on-chain. */
   sender: string | null;
+  /** sablier_lockup: the CURRENT proven stream-NFT holder only, null otherwise (see holder_status). smithii_vesting: null for merkle receivers. */
   recipient: string | null;
+  /** Server 2026-10-03 — sablier_lockup only (null for other programs); absent on older servers. */
+  holder_status?: TokenLockHolderStatus | null;
+  /** Server 2026-10-03 — sablier_lockup only: last holder a read proved (provenance, NOT the recipient unless holder_status is current). */
+  last_proven_holder?: string | null;
+  /** Server 2026-10-03 — sablier_lockup only: slot of the read that last proved last_proven_holder. */
+  holder_proven_at_slot?: number | null;
   name: string | null;
   /** Deposited amount. */
   amount_raw: string;
@@ -2774,11 +2783,13 @@ export interface TokenLock {
   locked_pct_of_supply: number | null;
   unlocked_raw: string;
   unlocked: number | null;
-  /** Claimed so far. */
-  withdrawn_raw: string;
+  /** Claimed so far; null when the program does not expose it (withdrawn_tracked false: smithii_vesting). */
+  withdrawn_raw: string | null;
   withdrawn: number | null;
-  /** Unlocked but not yet withdrawn. */
-  claimable_raw: string;
+  /** Server 2026-10-03 — false = withdrawn / claimable are unknown (null), not zero. Absent on older servers (= tracked). */
+  withdrawn_tracked?: boolean;
+  /** Unlocked but not yet withdrawn; null when withdrawn is not tracked. */
+  claimable_raw: string | null;
   claimable: number | null;
   start_at: string | null;
   cliff_at: string | null;
@@ -7160,16 +7171,48 @@ export interface CopyTradeSubscription {
   created_at: string;
   updated_at?: string;
   /**
-   * Source wallets that are tracked KOL wallets (can produce signals), read at
-   * response time. `null` when the tracking lookup failed (see `warnings`).
-   * Server 2026-09-25 on; absent on older ones.
+   * Source wallets that are tracked KOL wallets, read at response time. Under
+   * `source_admission: "any_wallet"` (production since 2026-10-04) this is KOL
+   * enrichment only; under the legacy `"kol_only"` engine only these produce signals.
+   * `null` when the tracking lookup failed (see `warnings`). Server 2026-09-25 on.
+   * @deprecated 2026-10-04 — kept and still filled; KOL membership is enrichment only.
    */
   source_wallets_tracked?: string[] | null;
-  /** Source wallets that are NOT tracked KOL wallets: they never produce a signal. */
+  /**
+   * Source wallets that are NOT tracked KOL wallets. Under `source_admission: "any_wallet"`
+   * they fire like any other wallet (no Wallet Tracker entry or quota needed); under the
+   * legacy `"kol_only"` engine they never produce a signal.
+   * @deprecated 2026-10-04 — kept and still filled; KOL membership is enrichment only.
+   */
   source_wallets_untracked?: string[] | null;
-  /** Present when at least one wallet is untracked, or tracking could not be determined. */
+  /** Present when something needs attention (legacy kol_only: untracked wallets), or tracking could not be determined. */
   warnings?: CopyTradeRuleWarning[];
+  /** Server 2026-10-04 — whether the rule can fire right now, separate from `is_active`; see {@link CopyTradeOperationalState}. */
+  operational_state?: CopyTradeOperationalState;
+  /** Server 2026-10-04 — which trades the RUNNING engine admits. Absent = unknown (legacy kol_only semantics). */
+  source_admission?: CopyTradeSourceAdmission;
+  /** Server 2026-10-04 — present only with `operational_state: "monitoring_unavailable"`: e.g. `trade_stream_stale`, `source_producer_stale`, `map_stale`, `engine_state_stale`. */
+  monitoring_reasons?: string[];
 }
+
+/**
+ * Which trades the running copy-trade engine admits. `any_wallet` (production since
+ * 2026-10-04): copy-trade rules can now follow any valid wallet, KOL or not (KOL
+ * membership is enrichment only). `kol_only`: legacy, only tracked KOL wallets fire.
+ */
+export type CopyTradeSourceAdmission = "kol_only" | "any_wallet";
+
+/**
+ * Whether a copy-trade rule can fire. Under `any_wallet`: `eligible`, or an
+ * infrastructure state — `monitoring_pending` (rule changed after the engine's last
+ * load, live within seconds), `monitoring_unavailable` (engine / trade stream not
+ * reporting; it fires nothing then, see `monitoring_reasons`),
+ * `source_capacity_unavailable` (engine source-wallet cap reached). Legacy
+ * `kol_only`: `no_tracked_sources` | `unknown`.
+ */
+export type CopyTradeOperationalState =
+  | "eligible" | "monitoring_pending" | "monitoring_unavailable" | "source_capacity_unavailable"
+  | "no_tracked_sources" | "unknown";
 
 /** A non-fatal note on a copy-trade rule. The rule is saved unchanged. */
 export interface CopyTradeRuleWarning {

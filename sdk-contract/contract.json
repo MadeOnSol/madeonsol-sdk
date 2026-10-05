@@ -2,7 +2,7 @@
   "schema": 1,
   "source": "MadeOnSol/madeonsol src/lib/openapi-spec.ts (scripts/generate-sdk-contract.mjs)",
   "api_version": "1.20.0",
-  "contract_hash": "81433a0747603c4c5e587c3324c32fc306244e0aef1f3d244b5d8c5cd844494f",
+  "contract_hash": "550b5397ba4cdc7eca4cd20b77ae20922f074d275cdfe45afe7db2cbf0288bce",
   "operation_count": 198,
   "operations": [
     {
@@ -208,10 +208,13 @@
             "max_mc_usd",
             "min_mc_usd",
             "min_trade_sol",
+            "monitoring_reasons",
             "name",
             "only_action",
+            "operational_state",
             "sizing_amount",
             "sizing_mode",
+            "source_admission",
             "source_wallets",
             "source_wallets_tracked",
             "source_wallets_untracked",
@@ -2486,11 +2489,13 @@
             "id",
             "is_active",
             "min_trade_eth",
+            "monitoring_reasons",
             "name",
             "only_action",
             "operational_state",
             "sizing_amount",
             "sizing_mode",
+            "source_admission",
             "source_wallets",
             "source_wallets_tracked",
             "source_wallets_untracked",
@@ -6194,7 +6199,10 @@
             "created_at_estimated",
             "end_at",
             "explorer",
+            "holder_proven_at_slot",
+            "holder_status",
             "kind",
+            "last_proven_holder",
             "lock_account",
             "locked",
             "locked_pct_of_supply",
@@ -6221,7 +6229,8 @@
             "unlocked",
             "unlocked_raw",
             "withdrawn",
-            "withdrawn_raw"
+            "withdrawn_raw",
+            "withdrawn_tracked"
           ]
         }
       }
@@ -6827,7 +6836,10 @@
             "created_at_estimated",
             "end_at",
             "explorer",
+            "holder_proven_at_slot",
+            "holder_status",
             "kind",
+            "last_proven_holder",
             "lock_account",
             "locked",
             "locked_pct_of_supply",
@@ -6853,7 +6865,8 @@
             "unlocked",
             "unlocked_raw",
             "withdrawn",
-            "withdrawn_raw"
+            "withdrawn_raw",
+            "withdrawn_tracked"
           ]
         }
       }

@@ -3,6 +3,8 @@
 // the route emits numbers, null where it can null. `npm test` type-checks this
 // file (test/tsconfig.json); a type that drifts from the wire shape fails it.
 import type {
+  CopyTradeSubscription,
+  TokenLock,
   AlphaLinkedResponse,
   CandlesResponse,
   CoordinationHistoryResponse,
@@ -261,3 +263,22 @@ export const deployerActivityUltraIdentity: DeployerActivityResponse["identity"]
 };
 export const deployerActivityNonDeployer: DeployerActivityResponse["coverage"]["families"][string] = { ...famCov, skipped_reason: "no_attributed_launch" };
 
+
+// GET /copytrade/subscriptions (server 2026-10-04): any-wallet admission + operational state.
+export const copytradeAnyWallet = {
+  id: 1, name: null, source_wallets: ["W1", "W2"], min_trade_sol: 0, only_action: "buy", sizing_mode: "fixed", sizing_amount: 0.1,
+  delivery_mode: "websocket", webhook_url: null, min_mc_usd: null, max_mc_usd: null, is_active: true, created_at: "t", updated_at: "t",
+  source_wallets_tracked: ["W1"], source_wallets_untracked: ["W2"],
+  operational_state: "eligible", source_admission: "any_wallet",
+} satisfies CopyTradeSubscription;
+export const copytradeMonitoringDown = {
+  ...copytradeAnyWallet, operational_state: "monitoring_unavailable", monitoring_reasons: ["trade_stream_stale"],
+} satisfies CopyTradeSubscription;
+
+// GET /tokens/{mint}/locks (server 2026-10-03): Sablier holder proof + untracked withdrawals.
+export const sablierLockHolder: Pick<TokenLock, "program" | "recipient" | "holder_status" | "last_proven_holder" | "holder_proven_at_slot"> = {
+  program: "sablier_lockup", recipient: null, holder_status: "lost_proof", last_proven_holder: "H", holder_proven_at_slot: 312000000,
+};
+export const smithiiWithdrawals: Pick<TokenLock, "program" | "withdrawn_raw" | "withdrawn" | "withdrawn_tracked" | "claimable_raw" | "claimable"> = {
+  program: "smithii_vesting", withdrawn_raw: null, withdrawn: null, withdrawn_tracked: false, claimable_raw: null, claimable: null,
+};
