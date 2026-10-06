@@ -2230,6 +2230,17 @@ export interface AlphaCapTableResponse {
   summary: AlphaCapTableSummary;
   /** v2.22.4 — trade-coverage disclosure (additive; absent on older cached responses). */
   coverage?: TradeCoverage;
+  /** 2026-10: whether early-buyer ranks 1..20 can be trusted. `gap_overlap` = a
+   * recorded ingest gap overlaps launch to the last ranked buy, so a true early
+   * buyer may be missing. Absent on older responses. */
+  ranks_completeness?: {
+    ranks_complete: "observed_from_launch" | "gap_overlap" | "not_verified" | "no_ranks";
+    rank_basis: "first_persisted_buys_at_or_above_floor";
+    window: { from: string; to: string } | null;
+    gaps_overlapping: number;
+    open_slots: number;
+    gaps_in_open_slots: number;
+  };
 }
 
 export interface AlphaBuyerQualityBreakdown {
@@ -4211,8 +4222,21 @@ export interface TokenDepthPool extends TokenDepthPoolBase {
   depth_available: true;
   /** The model the depth math ran on (matches `pool_model`). */
   model: string;
+  /** Concentrated pools only: the program-exact model that produced the numbers. */
+  model_detail?: "meteora_dlmm_bins" | "raydium_clmm_ticks" | "meteora_damm_v2_full_range";
+  /** Meteora DAMM v2 only: the proven Pool account (`pool_address` is the vault). */
+  pool_account?: string;
   /** Swap fee, % (e.g. 0.25). */
   fee_pct: number;
+  /** `observed_event` (PumpSwap virtual-reserve model), `dynamic_fee_at_quote_time`
+   * (Meteora DLMM base + variable fee) or `amm_config_at_quote_time`. Absent =
+   * static venue fee. */
+  fee_basis?: "observed_event" | "dynamic_fee_at_quote_time" | "amm_config_at_quote_time";
+  /** Meteora DLMM only: the loaded bin range and its slot; quotes never walk outside it. */
+  bins_window?: { from_bin: number; to_bin: number; slot: number };
+  /** Raydium CLMM only: the loaded tick range [from_tick, to_tick) in the buy
+   * direction and its slot. */
+  ticks_window?: { from_tick: number; to_tick: number; slot: number };
   source: TokenDepthSource;
   /** Age of the stream reserves in ms (time since the pool's last swap); 0 for
    * `live_rpc` reads. */
@@ -4249,6 +4273,14 @@ export interface TokenDepthResponse {
   pools: TokenDepthPool[];
   unsupported_pools: TokenDepthUnsupportedPool[];
   note?: string;
+  /** Only with a concentrated depth model enabled: largest known pool vs the
+   * reported pool; routing is single-pool only. */
+  pool_selection?: {
+    largest_known_pool: string;
+    largest_known_pool_supported: boolean;
+    primary_pool: string | null;
+    routing: "single_pool_only";
+  };
   _rid?: string;
 }
 
@@ -4359,12 +4391,28 @@ export interface WalletClassification {
   kol_name: string | null;
   bot_confidence: BotConfidence | null;
   dump_cluster: DumpClusterStats | null;
+  /** 2026-10: whether each flag's rule actually evaluated this wallet.
+   * `evaluated: false` means the boolean is "no evidence", not "verified clean". */
+  label_coverage?: Record<"sniper" | "bundler" | "dumper" | "kol", LabelCoverageEntry>;
+}
+
+export type LabelCoverageReason =
+  | "flagged" | "rule_evaluated" | "insufficient_sample" | "not_checked_budget"
+  | "sample_unavailable" | "population_not_checked" | "no_cohort_stats" | "registry";
+
+export interface LabelCoverageEntry {
+  evaluated: boolean;
+  reason: LabelCoverageReason;
 }
 
 export interface WalletBatchClassifyResponse {
   wallets: WalletClassification[];
   count: number;
   as_of: string;
+  /** 2026-10: label rule version, e.g. `wallet-labels/368-v1`. */
+  rule_version?: string;
+  /** 2026-10: one sentence per label describing its population and window. */
+  evidence_horizon?: { sniper: string; bundler: string; dumper: string; kol: string };
   _rid?: string;
 }
 
@@ -4549,6 +4597,46 @@ export interface WalletOpenPosition {
   unrealized_pct:    number | null;
   first_buy_at: string | null;
   buys_in_position: number;
+  /** 2026-10: positions are FIFO-open DEX buys (a trade position), not a proven holding. */
+  position_basis?: "swap_derived";
+  /** 2026-10: `verified` = an on-chain balance snapshot confirmed this position. */
+  holding_status?: "verified" | "unverified";
+  holding_unverified_reason?:
+    | "not_checked" | "no_fresh_snapshot" | "snapshot_unreadable"
+    | "snapshot_older_than_trades" | "decimals_mismatch" | "balance_invalid" | null;
+  /** `partial` = a verified balance exceeds the trade position; the excess
+   * arrived without a swap and has no cost basis. */
+  cost_basis_status?: "known" | "partial";
+  /** Present (non-null) only when `holding_status` is `verified`. */
+  holding?: WalletPositionHolding | null;
+}
+
+/** 2026-10: proven on-chain holding for one swap-derived position. */
+export interface WalletPositionHolding {
+  status: "HELD" | "PARTIALLY_REDUCED" | "TRANSFERRED_OR_DISPOSED" | "EXTERNAL_INFLOW";
+  onchain_balance: number;
+  held_known_amount: number;
+  external_inflow_amount: number;
+  cost_basis_held_sol: number;
+  unrealized_known_sol: number | null;
+  /** Cost of FIFO lots no longer in the wallet. Outcome unknown: neither realized nor unrealized. */
+  cost_basis_not_held_sol: number;
+  verified_at: string;
+  source: "wallet_holdings_cache";
+}
+
+/** 2026-10: summary of the proven-holding check over the returned open positions. */
+export interface WalletHoldingCheck {
+  mode: "off" | "cache";
+  source: "wallet_holdings_cache" | null;
+  verified_at: string | null;
+  verified: number;
+  unverified: number;
+  held: number;
+  partially_reduced: number;
+  transferred_or_disposed: number;
+  external_inflow: number;
+  note: string;
 }
 
 export interface WalletPnlNotes {
@@ -4568,6 +4656,8 @@ export interface WalletPnlResponse {
   closed_positions: WalletClosedPosition[];
   open_positions:   WalletOpenPosition[];
   notes: WalletPnlNotes;
+  /** 2026-10: proven-holding check summary. Absent on older responses. */
+  holding_check?: WalletHoldingCheck;
   cache_hit?: boolean;
   /** Only present on cache hits. */
   computed_at?: string;
@@ -4588,6 +4678,8 @@ export interface WalletPnlResponse {
 export interface WalletPositionsResponse {
   address: string;
   positions: WalletOpenPosition[];
+  /** 2026-10: proven-holding check summary. Absent on older responses. */
+  holding_check?: WalletHoldingCheck;
   cache_hit?: boolean;
   computed_at?: string | null;
   ttl_seconds?: number | null;
@@ -4923,6 +5015,15 @@ export interface TokenSummary {
   /** VERIFIED LP evidence only; null = unknown (the honest answer for nearly every token today). */
   lp_burned?: boolean | null;
   lp_burn_status?: LpBurnStatus;
+  /** Burned + non-cancelable LOCKED share of the LP (0-100), from LP evidence;
+   * null = unknown (never 0 for unknown). `lp_burnt_pct` stays burn-only. */
+  lp_secured_pct?: number | null;
+  /** `permanent` = burn and/or permanent locks only; `temporary` = only
+   * time-limited locks; `mixed` = both; null = nothing secured or unknown. */
+  lp_secured_basis?: "permanent" | "temporary" | "mixed" | null;
+  /** Earliest end of a counted TEMPORARY LP lock (ISO); null when none.
+   * Permanent locks have no date. */
+  lp_locked_until?: string | null;
   /** Token-SUPPLY burn observed (not LP evidence); null = unknown. */
   token_supply_burn_detected?: boolean | null;
 }
@@ -4981,6 +5082,11 @@ export interface AlmostBondedToken {
   mint: string;
   symbol: string | null;
   name: string | null;
+  /** Launch venue: pump.fun curve or bonk/LetsBonk (Raydium LaunchLab). */
+  launchpad?: "pumpfun" | "launchlab";
+  /** 2026-10: where `launchpad` came from: `primary_dex`, or the token's single
+   * curve pool in `token_pools` when primary_dex is unset. */
+  venue_source?: "primary_dex" | "token_pools";
   /** Bonding-curve progress %, from on-chain real_token_reserves depletion. */
   progress_pct: number | null;
   /** Δprogress per minute; null until a 5m-ago snapshot exists. */
@@ -5731,8 +5837,23 @@ export interface WalletFundingResponse {
    * redacted below ULTRA.
    */
   direct_funding?: { observed: boolean; [key: string]: unknown };
+  /** 2026-10: what the funding collector can see for THIS address.
+   * `not_tracked` = no evidence is collected for it at all. */
+  wallet_coverage?: WalletFundingCoverage;
   disclaimer: string;
   _rid?: string;
+}
+
+/** Per-address funding collector coverage (`wallet_coverage`). */
+export interface WalletFundingCoverage {
+  /** `internal_transfers_not_visible` only occurs on Robinhood Chain. */
+  state: "tracked" | "not_tracked" | "internal_transfers_not_visible";
+  currently_tracked: boolean;
+  ever_tracked: boolean;
+  /** Robinhood Chain only; always null on Solana. */
+  address_kind: "eoa" | "eoa_7702" | "contract" | "unknown" | null;
+  /** Solana: `spl_token_transfers_not_visible`. */
+  limitations: Array<"spl_token_transfers_not_visible" | "internal_eth_transfers_not_visible" | "erc20_only_eth_weth_usdg_classified_as_funding">;
 }
 
 // ─── Client config ────────────────────────────────────────────────────────────
@@ -7280,6 +7401,16 @@ export interface CopyTradeSignal {
   market_cap_usd?: number | null;
   /** Current last-trade price (USD). */
   last_price_usd?: number | null;
+  /** Copy-trade identity v2: the independent action this signal copies (null on
+   * `identity_version` 1 rows). Several signals can share one `tx_signature`:
+   * dedupe on `id` or `economic_action_id`, never on `tx_signature`. */
+  economic_action_id?: string | null;
+  /** Copy-trade identity v2: the followed wallet that performed the action. */
+  source_actor?: string | null;
+  /** Copy-trade identity v2: other followed wallets in the same action. */
+  co_actors?: string[];
+  /** 1 = one signal per (rule, tx); 2 = one signal per (rule, economic action). */
+  identity_version?: 1 | 2;
 }
 
 export interface CopyTradeSignalsParams {
