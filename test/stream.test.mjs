@@ -37,12 +37,13 @@ function fakeSocketClass(server) {
       this.readyState = 0;
       this.onopen = this.onmessage = this.onclose = this.onerror = null;
       server.sockets.push(this);
-      setTimeout(() => {
-        if (this.readyState !== 0) return;
-        this.readyState = 1;
-        this.onopen?.({});
-        this.push({ type: "connected", seq: server.seq, instance: server.instance, ts: Date.now() });
-      }, 1);
+      if (server.autoOpen) setTimeout(() => this.open(), 1);
+    }
+    open() {
+      if (this.readyState !== 0) return;
+      this.readyState = 1;
+      this.onopen?.({});
+      this.push({ type: "connected", seq: server.seq, instance: server.instance, ts: Date.now() });
     }
     send(raw) {
       const msg = JSON.parse(raw);
@@ -67,7 +68,8 @@ function fakeSocketClass(server) {
  * mode "legacy" is today's server (ignores `resume`, honours replay_since_*).
  */
 class FakeServer {
-  constructor({ mode = "v1", instance = "inst-A", echoResume = true } = {}) {
+  constructor({ mode = "v1", instance = "inst-A", echoResume = true, autoOpen = true } = {}) {
+    this.autoOpen = autoOpen;
     this.mode = mode;
     this.instance = instance;
     this.echoResume = echoResume;
@@ -169,6 +171,41 @@ function makeStream(server, opts = {}) {
   for (const k of Object.keys(events)) stream.on(k, (x) => events[k].push(x));
   return { stream, got, events, tokenCalls: () => tokenCalls };
 }
+
+test("connect and subscribe reuse the socket throughout the CONNECTING handshake", async () => {
+  const server = new FakeServer({ autoOpen: false });
+  const { stream, tokenCalls } = makeStream(server);
+  const initialConnect = stream.connect();
+  stream.subscribe([CH]);
+  // Let token resolution finish without opening the socket. This is the gap
+  // after connecting resets but before the WebSocket open event arrives.
+  await initialConnect;
+  assert.equal(server.sockets.length, 1);
+  const ws = server.last;
+  assert.equal(ws.readyState, 0);
+  await stream.connect();
+  stream.subscribe([CH2]);
+  await stream.connect();
+  assert.equal(server.sockets.length, 1, "no orphan socket during the handshake");
+  assert.equal(tokenCalls(), 1, "no extra token request during the handshake");
+  ws.open();
+  assert.equal(server.subscribes.length, 1);
+  assert.deepEqual(new Set(server.subscribes[0].channels), new Set([CH, CH2]));
+  stream.close();
+  assert.equal(server.sockets.filter((socket) => socket.readyState !== 3).length, 0);
+});
+
+test("close terminates the only socket while its handshake is pending", async () => {
+  const server = new FakeServer({ autoOpen: false });
+  const { stream } = makeStream(server);
+  await stream.connect();
+  await stream.connect();
+  assert.equal(server.sockets.length, 1);
+  stream.close();
+  for (const ws of server.sockets) ws.open();
+  assert.equal(server.sockets.filter((ws) => ws.readyState !== 3).length, 0);
+  assert.equal(server.subscribes.length, 0);
+});
 
 test("tracks the cursor of processed frames; seq gaps are never reported as loss", async () => {
   const server = new FakeServer();

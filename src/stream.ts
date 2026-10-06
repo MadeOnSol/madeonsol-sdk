@@ -447,6 +447,7 @@ async function resolveWebSocket(override?: unknown): Promise<new (url: string) =
   );
 }
 
+const CONNECTING = 0;
 const OPEN = 1;
 type Frame = Record<string, unknown>;
 type Position = { instance: string | null; seq: number | null; ts: number };
@@ -765,7 +766,8 @@ export class MadeOnSolStream {
 
   /** Open the connection (also called implicitly by subscribe). Restarts a stream that went `"fatal"`. */
   async connect(): Promise<void> {
-    if (this.connecting || (this.ws && this.ws.readyState === OPEN)) return;
+    // A socket that is still CONNECTING is the connection; opening another would orphan it.
+    if (this.connecting || (this.ws && (this.ws.readyState === CONNECTING || this.ws.readyState === OPEN))) return;
     if (this.stopped) { this.stopped = false; this.authFailures = 0; this.attempt = 0; }
     this.closedByUser = false;
     this.connecting = true;
