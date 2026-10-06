@@ -2,7 +2,7 @@
   "schema": 1,
   "source": "MadeOnSol/madeonsol src/lib/openapi-spec.ts (scripts/generate-sdk-contract.mjs)",
   "api_version": "1.20.0",
-  "contract_hash": "550b5397ba4cdc7eca4cd20b77ae20922f074d275cdfe45afe7db2cbf0288bce",
+  "contract_hash": "c789b56f1420e9587d9ae45c039c50c1774392e92dc3ac360fc9ce5d9a47b09b",
   "operation_count": 198,
   "operations": [
     {
@@ -144,6 +144,7 @@
       "params": {
         "path": [],
         "query": [
+          "cursor",
           "limit",
           "max_mc_usd",
           "min_mc_usd",
@@ -154,22 +155,29 @@
       "body": [],
       "response": {
         "top": [
+          "has_more",
+          "next_cursor",
+          "scan",
           "signals"
         ],
         "items": {
           "signals": [
             "action",
+            "co_actors",
             "delivered",
             "delivered_at",
+            "economic_action_id",
             "fired_at",
             "history_age_seconds",
             "id",
+            "identity_version",
             "last_price_usd",
             "market_cap_usd",
             "market_cap_usd_at_trade",
             "mc_change_pct",
             "mev_volume_pct",
             "price_usd_at_trade",
+            "source_actor",
             "source_sol_amount",
             "source_wallet",
             "subscription_id",
@@ -4662,6 +4670,7 @@
           "concentration",
           "count",
           "has_more",
+          "history_coverage",
           "holder_growth",
           "holders",
           "limit",
@@ -5022,6 +5031,7 @@
             "log_index",
             "mc_usd_at_trade",
             "method_selector",
+            "pair_status",
             "pool",
             "price_native",
             "price_usd",
@@ -5256,7 +5266,8 @@
           "pagination",
           "shared_funders",
           "status",
-          "summary"
+          "summary",
+          "wallet_coverage"
         ],
         "items": {
           "shared_funders": [
@@ -5946,6 +5957,9 @@
             "lp_burn_status",
             "lp_burned",
             "lp_burnt_pct",
+            "lp_locked_until",
+            "lp_secured_basis",
+            "lp_secured_pct",
             "market_cap_usd",
             "mc_change_1h_pct",
             "mc_change_5m_pct",
@@ -6008,7 +6022,8 @@
             "real_sol_reserves",
             "stalled",
             "symbol",
-            "velocity_pct_per_min"
+            "velocity_pct_per_min",
+            "venue_source"
           ]
         }
       }
@@ -6551,6 +6566,7 @@
           "buyers",
           "coverage",
           "mint",
+          "ranks_completeness",
           "summary"
         ],
         "items": {
@@ -6596,6 +6612,7 @@
           "found",
           "mint",
           "note",
+          "pool_selection",
           "pools",
           "primary_pool",
           "sizes_sol",
@@ -6605,12 +6622,16 @@
         ],
         "items": {
           "pools": [
+            "bins_window",
             "depth_available",
             "dex",
+            "fee_basis",
             "fee_pct",
             "is_active",
             "liquidity_usd",
             "model",
+            "model_detail",
+            "pool_account",
             "pool_address",
             "pool_model",
             "quote_mint",
@@ -6618,6 +6639,7 @@
             "reserves_age_ms",
             "source",
             "spot_price_sol",
+            "ticks_window",
             "to_move_price"
           ],
           "unsupported_pools": [
@@ -7352,6 +7374,8 @@
           "as_of",
           "count",
           "coverage",
+          "evidence_horizon",
+          "rule_version",
           "wallets"
         ],
         "items": {
@@ -7363,7 +7387,8 @@
             "is_dumper",
             "is_kol",
             "is_sniper",
-            "kol_name"
+            "kol_name",
+            "label_coverage"
           ]
         }
       }
@@ -7520,7 +7545,8 @@
           "pagination",
           "shared_funders",
           "status",
-          "summary"
+          "summary",
+          "wallet_coverage"
         ],
         "items": {
           "shared_funders": [
@@ -7605,6 +7631,7 @@
           "cache_validation",
           "closed_positions",
           "computed_at",
+          "holding_check",
           "notes",
           "open_positions",
           "pnl_curve",
@@ -7630,9 +7657,14 @@
             "avg_entry_price_sol",
             "buys_in_position",
             "cost_basis_sol",
+            "cost_basis_status",
             "current_price_sol",
             "current_value_sol",
             "first_buy_at",
+            "holding",
+            "holding_status",
+            "holding_unverified_reason",
+            "position_basis",
             "token_amount",
             "token_mint",
             "unrealized_pct",
@@ -7669,6 +7701,7 @@
           "cache_invalidated",
           "cache_validation",
           "computed_at",
+          "holding_check",
           "positions",
           "ttl_seconds"
         ],
@@ -7677,9 +7710,14 @@
             "avg_entry_price_sol",
             "buys_in_position",
             "cost_basis_sol",
+            "cost_basis_status",
             "current_price_sol",
             "current_value_sol",
             "first_buy_at",
+            "holding",
+            "holding_status",
+            "holding_unverified_reason",
+            "position_basis",
             "token_amount",
             "token_mint",
             "unrealized_pct",

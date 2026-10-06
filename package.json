@@ -1,6 +1,6 @@
 {
   "name": "madeonsol",
-  "version": "4.2.1",
+  "version": "4.3.0",
   "description": "Official SDK for the MadeOnSol Solana API — KOL wallet tracking, Pump.fun deployer intelligence, and tool directory",
   "type": "module",
   "main": "dist/index.js",
