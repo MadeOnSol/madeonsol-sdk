@@ -2,7 +2,7 @@
   "schema": 1,
   "source": "MadeOnSol/madeonsol src/lib/openapi-spec.ts (scripts/generate-sdk-contract.mjs)",
   "api_version": "1.20.0",
-  "contract_hash": "c789b56f1420e9587d9ae45c039c50c1774392e92dc3ac360fc9ce5d9a47b09b",
+  "contract_hash": "90601e3b33ea26daa18cc978a9ea8cd89217200abd875a664e0d5948aa909753",
   "operation_count": 198,
   "operations": [
     {
@@ -5539,7 +5539,38 @@
           "deployer",
           "deploys"
         ],
-        "items": {}
+        "items": {
+          "deploys": [
+            "attribution_checked_at",
+            "attribution_status",
+            "confirmed_at",
+            "confirmed_on_chain",
+            "deployer_bond_rate",
+            "deployer_labeled_tokens",
+            "deployer_recent",
+            "deployer_runner_rate",
+            "deployer_tier",
+            "deployer_total_bonded",
+            "deployer_wallet",
+            "detected_at",
+            "detection_confirmed",
+            "detection_region",
+            "event_id",
+            "execution_status",
+            "fee_payer",
+            "footprint",
+            "mint",
+            "name",
+            "observation_stage",
+            "outer_instruction_index",
+            "signature",
+            "slot",
+            "source",
+            "symbol",
+            "transaction_config",
+            "transaction_version"
+          ]
+        }
       }
     },
     {
@@ -5547,7 +5578,7 @@
       "method": "GET",
       "path": "/sniper/recent",
       "chain": "solana",
-      "tier": "PRO",
+      "tier": "ULTRA",
       "alias_of": null,
       "params": {
         "path": [],
@@ -5584,12 +5615,20 @@
             "detected_at",
             "detection_confirmed",
             "detection_region",
+            "event_id",
+            "execution_status",
+            "fee_payer",
             "footprint",
             "mint",
             "name",
+            "observation_stage",
+            "outer_instruction_index",
             "signature",
             "slot",
-            "symbol"
+            "source",
+            "symbol",
+            "transaction_config",
+            "transaction_version"
           ]
         }
       }
@@ -5754,6 +5793,8 @@
         "top": [
           "channels",
           "dex_ws_url",
+          "early_stream",
+          "early_ws_url",
           "expires_at",
           "lifetime",
           "named_subscriptions",
