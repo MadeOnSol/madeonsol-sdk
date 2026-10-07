@@ -2,7 +2,7 @@
   "schema": 1,
   "source": "MadeOnSol/madeonsol src/lib/openapi-spec.ts (scripts/generate-sdk-contract.mjs)",
   "api_version": "1.20.0",
-  "contract_hash": "90601e3b33ea26daa18cc978a9ea8cd89217200abd875a664e0d5948aa909753",
+  "contract_hash": "31b0a30faf8414331300965e8759c2873b78bdfd405846444efbdc3c5390e4e1",
   "operation_count": 198,
   "operations": [
     {
@@ -700,6 +700,7 @@
             "asset",
             "at",
             "bonded_at",
+            "counterparty_count",
             "decimals",
             "dev_buy_sol",
             "dev_buy_supply_pct",
@@ -714,6 +715,7 @@
             "initiated_by",
             "kind",
             "last_at",
+            "late_classified",
             "launchpad",
             "mint",
             "name",
@@ -721,6 +723,8 @@
             "price_usd",
             "quote_mint",
             "recipient",
+            "recovered",
+            "recovered_at",
             "sample_tx_ids",
             "sol",
             "source",

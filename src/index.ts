@@ -1989,6 +1989,14 @@ export interface DeployerActivityEvent {
   /** Time of the event itself (the window applies to this). */
   at:          string;
   time_basis:  "chain" | "ingest" | "chain_or_ingest";
+  /** dev transfer / dev trade rows restored after a delivery gap (history only, never delivered live). getBlock recovery has `time_basis: "chain"`; spool replay keeps the original receive time (`"ingest"`). */
+  recovered?:          boolean;
+  /** When the recovery wrote the row (only with `recovered: true`). */
+  recovered_at?:       string | null;
+  /** Received live but classified after a parked creator lookup (broad transfer source); `at` stays the receive time. */
+  late_classified?:    boolean;
+  /** Transfers aggregate per (tx, token, direction, actor): how many counterparties the aggregate has (null on rows written before 2026-10-06). */
+  counterparty_count?: number | null;
   mint?:       string | null;
   name?:       string | null;
   symbol?:     string | null;
