@@ -1989,6 +1989,14 @@ export interface DeployerActivityEvent {
   /** Time of the event itself (the window applies to this). */
   at:          string;
   time_basis:  "chain" | "ingest" | "chain_or_ingest";
+  /** dev transfer / dev trade rows restored after a delivery gap (history only, never delivered live). getBlock recovery has `time_basis: "chain"`; spool replay keeps the original receive time (`"ingest"`). */
+  recovered?:          boolean;
+  /** When the recovery wrote the row (only with `recovered: true`). */
+  recovered_at?:       string | null;
+  /** Received live but classified after a parked creator lookup (broad transfer source); `at` stays the receive time. */
+  late_classified?:    boolean;
+  /** Transfers aggregate per (tx, token, direction, actor): how many counterparties the aggregate has (null on rows written before 2026-10-06). */
+  counterparty_count?: number | null;
   mint?:       string | null;
   name?:       string | null;
   symbol?:     string | null;
@@ -5319,6 +5327,14 @@ export interface ToolsSearchResponse {
 // ─── Streaming types ────────────────────────────────────────────────────────
 
 export interface StreamToken {
+  /** Only present when ShredPrism is active and the subscriber is ULTRA/BUSINESS/ENTERPRISE. */
+  early_ws_url?: string;
+  early_stream?: {
+    channels: "early:deploys"[];
+    subscribe_example: { type: "subscribe"; channels: "early:deploys"[] };
+    execution_status: "unknown";
+    note: string;
+  };
   token: string;
   /** Always `null` since 2026-08-27 — stream tokens never expire. Kept for wire compatibility; do not schedule refreshes on it. */
   expires_at: string | null;
@@ -6791,13 +6807,29 @@ class WalletTrackerClient {
   }
 }
 
-// ─── Sniper: deshred pre-confirm pump.fun deploy feed (PRO + ULTRA) ─────────
-// Deploys are reconstructed from shred-level ("deshred") data and surface
-// ~500ms before the chain confirms them — the fastest path to a new pump.fun
-// launch. PRO is curated to elite/good deployers; ULTRA sees every deployer
-// tier and can maintain a custom deployer watchlist.
+// ─── Sniper: early deploy observations (ULTRA/BUSINESS/ENTERPRISE) ─────────
+// Observed instructions are not proof of execution. No timing lead is promised;
+// watchlists narrow the feed without changing its entitlement requirements.
+
+/** Encoded requests, not execution measurements. Missing resource bits stay null. */
+export interface EarlyTransactionConfig {
+  config_mask: number;
+  priority_fee_lamports: string | null;
+  compute_unit_limit: number | null;
+  loaded_accounts_data_size_limit: number | null;
+  heap_size: number | null;
+}
 
 export interface SniperDeploy {
+  /** Deduplicate by event_id; execution remains unknown until separately resolved. */
+  event_id?: string;
+  source?: "shredprism" | "deshred";
+  outer_instruction_index?: number | null;
+  observation_stage?: "observed";
+  execution_status?: "unknown" | "succeeded" | "failed" | "unresolved";
+  transaction_version?: "legacy" | 0 | 1 | null;
+  transaction_config?: EarlyTransactionConfig | null;
+  fee_payer?: string | null;
   mint: string;
   name: string | null;
   symbol: string | null;
@@ -6818,7 +6850,7 @@ export interface SniperDeploy {
   deployer_runner_rate?: number | null;
   /** Confidence denominator; gate on >=3. */
   deployer_labeled_tokens?: number | null;
-  /** "deshred" — detection is pre-execution, so the payload carries no MC/logs/balances. */
+  /** Null until separate chain evidence is available; observation is not execution. */
   confirmed_on_chain: boolean | null;
   confirmed_at: string | null;
   /** v2.20 — slot-window snipe rollup for this deploy (slots [-1..+3]). `null`
@@ -6887,7 +6919,7 @@ export interface SniperWatchlistRemoveResponse {
 }
 
 /**
- * Deshred pre-confirm pump.fun sniper feed. PRO + ULTRA.
+ * Early deploy observations. ULTRA/BUSINESS/ENTERPRISE; no guaranteed timing lead.
  * Live alerts flow via webhook (`sniper:deploy`), the `sniper:deploys` WebSocket
  * channel; these methods are for catch-up,
  * backtesting, and managing the ULTRA custom watchlist.
@@ -6901,7 +6933,7 @@ class SniperClient {
   ) {}
 
   /**
-   * Newest-first deshred deploy feed. PRO sees elite/good deployers; ULTRA sees all.
+   * Newest-first early deploy feed. ULTRA/BUSINESS/ENTERPRISE only.
    * Pass `watchlist: true` (ULTRA) to narrow to your custom deployer watchlist.
    */
   recent(params?: SniperRecentParams): Promise<SniperRecentResponse> {
@@ -6915,7 +6947,7 @@ class SniperClient {
     return this._get(buildUrl(this._baseUrl, "/sniper/recent", q));
   }
 
-  /** Deshred deploys filtered to a single deployer wallet. ULTRA only. */
+  /** Early deploys filtered to a single deployer wallet. ULTRA+ only. */
   byDeployer(wallet: string, params?: { limit?: number }): Promise<SniperByDeployerResponse> {
     return this._get(buildUrl(this._baseUrl, `/sniper/by-deployer/${encodeURIComponent(wallet)}`, params as Record<string, number | undefined>));
   }
@@ -7626,7 +7658,7 @@ export class MadeOnSol {
   readonly firstTouchSubscriptions: FirstTouchSubscriptionsClient;
   /** Price alerts CRUD — PRO/ULTRA. Sub-second dip/recovery detection. */
   readonly priceAlerts: PriceAlertsClient;
-  /** Deshred pre-confirm pump.fun sniper feed + custom watchlist — PRO/ULTRA. */
+  /** Early deploy observations + custom watchlist — ULTRA/BUSINESS/ENTERPRISE. */
   readonly sniper: SniperClient;
   /** Copy-trade rules + fired signals — PRO/ULTRA. */
   readonly copytrade: CopyTradeClient;

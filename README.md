@@ -10,9 +10,11 @@
 > ⭐ **[Star on GitHub](https://github.com/madeonsol/madeonsol-sdk)** if you find this useful · 📂 **[Examples](./examples/)** · 📚 **[API docs](https://madeonsol.com/api-docs)**
 
 Official TypeScript/JavaScript SDK for the **[MadeOnSol](https://madeonsol.com) Solana API** — zero dependencies, fully typed, works in Node.js ≥ 18 and edge runtimes.
-> Real-time Solana trading intelligence: track 1,069 KOL wallets with <3s latency on paid keys and x402 pay-per-call (free-tier live feeds are 5-min delayed), score 23,000+ Pump.fun deployers, surface deshred deploy signals **~500ms before on-chain confirmation**, detect multi-KOL coordination, score token rug-risk 0–100 with a transparent factor breakdown, expose the bundle cohort that bought a token together and how much of supply it still holds, verify any wallet's current on-chain holdings with airdrop/insider `transfer_delta` detection, push every pump.fun graduation the second it bonds, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day across 40+ endpoints (live feeds 5-min delayed) — no signup payment. Get a key at [madeonsol.com/pricing](https://madeonsol.com/pricing).
+> Real-time Solana trading intelligence: track 1,069 KOL wallets with <3s latency on paid keys and x402 pay-per-call (free-tier live feeds are 5-min delayed), score 23,000+ Pump.fun deployers, surface early deploy observations with separate execution evidence, detect multi-KOL coordination, score token rug-risk 0–100 with a transparent factor breakdown, expose the bundle cohort that bought a token together and how much of supply it still holds, verify any wallet's current on-chain holdings with airdrop/insider `transfer_delta` detection, push every pump.fun graduation the second it bonds, and stream every DEX trade across 9+ programs. Free tier: 200 requests/day across 40+ endpoints (live feeds 5-min delayed) — no signup payment. Get a key at [madeonsol.com/pricing](https://madeonsol.com/pricing).
 
 > **Migrating to 4.0.0.** Runtime API behaviour is not intentionally changing: the server sends exactly what it sent before. The breaking change is the corrected public **type contract**. Several 3.x response types described field names and shapes the API never returned, so code that compiled against them read `undefined` at runtime. Rewritten or renamed types: `KolWalletProfile` (`kol` / `stats` / `scores` / `peer_ranks` / `recent_trades` / `pnl_by_token`), `KolTokenActivity` (`token_mint` / `summary` / `kols[]`), alpha linked wallets (`linked`, was `linked_wallets`), `DeployerTokenRow` (`token_mint`, was `mint`), wallet-tracker trade events (`slot`, `ingested_at`, `ordered_by`, `next_cursor_slot`; keys the API never sent are now optional and `@deprecated`), `DeployerProfileResponse` (from 3.0.0). Several previously required fields are now optional because the API omits or nulls them. Update the field names your code reads; no request-side change is needed.
+
+> **New in 4.4.0 (early deploy observations).** The sniper feed (`client.sniper.*`, the `sniper:deploys` channel and the `sniper:deploy` webhook) is ULTRA, BUSINESS and ENTERPRISE only, and it reports observed deploy instructions, not executions. `SniperDeploy` gains `event_id` (deduplicate on it), `source` (`"shredprism"` or `"deshred"`), `outer_instruction_index`, `observation_stage`, `execution_status` (`"unknown"` until separate chain evidence resolves it), `transaction_version` (`"legacy"`, `0` or `1`), `transaction_config` (`EarlyTransactionConfig`: the requested compute and fee settings, `priority_fee_lamports` as a decimal string, unset resources `null`) and `fee_payer`. `StreamToken` gains `early_ws_url` and `early_stream`, present only when the early stream is active and the key is ULTRA or above. Every new field is optional and absent on older responses. No timing lead is promised.
 
 > **New in 4.3.0 (stream handshake fix + contract parity).** `MadeOnSolStream` no longer opens a second WebSocket (or requests a second stream token) when `connect()` or `subscribe()` is called while the first socket is still connecting; channels requested during the handshake are sent once it opens, and `close()` during the handshake leaves no socket behind. Response types gain the fields the API already serves: copy-trade identity v2 on `CopyTradeSignal` (`economic_action_id`, `source_actor`, `co_actors`, `identity_version`), LP security on `TokenSummary` (`lp_secured_pct`, `lp_secured_basis`, `lp_locked_until`), `AlmostBondedToken.launchpad` / `venue_source`, cap-table `ranks_completeness`, depth `pool_selection` and per-pool `model_detail` / `pool_account` / `fee_basis` / `bins_window` / `ticks_window`, batch-classify `label_coverage` / `rule_version` / `evidence_horizon`, proven-holding fields on wallet PnL and positions (`holding_check`, `position_basis`, `holding_status`, `holding_unverified_reason`, `cost_basis_status`, `holding`) and funding `wallet_coverage`. All additive and optional.
 
@@ -72,7 +74,7 @@ Official TypeScript/JavaScript SDK for the **[MadeOnSol](https://madeonsol.com) 
 >
 > **New in 2.11** — **Graduation events + dump-cluster detection.** Subscribe `token:graduations` for every pump.fun bond in real time — tracked deployer or not — with typed `GraduationEvent` payloads (mint, deployer tier, time-to-bond, MC at bond). Buyer-quality `breakdown` adds `dump_cluster_count` (out-of-sample validated: 3+ such wallets in the first-20 → 94% dump vs 61% base) and `recycled_early_buyer_count` (high count with zero cluster leans runner). DEX firehose: replay buffer deepened to ~5 minutes; mint-scoped subs now receive in-band `dex:graduations` frames — the bond lands on the same connection as your position's trade flow.
 
-> **New in 2.9** — **Deshred Sniper Alerts.** `client.sniper.recent()` surfaces new pump.fun deploys reconstructed from shred-level data ~500ms before the chain confirms them — a measured head start over any confirmed-stream feed. PRO sees elite/good deployers; ULTRA sees every tier and maintains a custom deployer watchlist (`client.sniper.addToWatchlist()`). Use the `sniper:deploys` WebSocket channel or `sniper:deploy` webhook for live push instead of polling.
+> **Historical 2.9 release:** introduced the sniper endpoints. The current contract requires ULTRA/BUSINESS/ENTERPRISE and exposes observed intent separately from execution; see the early sniper section below.
 >
 > **New in 2.8** — **Price alerts, scout leaderboard, wallet derived stats.** `client.priceAlerts.*` — CRUD for token MC dip/recovery alerts delivered via webhook or WebSocket (PRO=5, ULTRA=25). `client.kol.scoutLeaderboard()` — top scouts ranked by first-touch follow-on rate. `client.kol.coordinationHistory()` and `client.token.peakHistory()` expose the historical record. `client.wallet.stats()` now returns a `derived` block: `win_rate`, `roi`, `verdict`, and `biggest_miss`.
 >
@@ -99,7 +101,7 @@ const { trades } = await client.kol.feed({ limit: 5, action: "buy" });
 | Feature | Description |
 |---|---|
 | **KOL Tracker** | Real-time trade feed, PnL leaderboard with five time windows (today, 7d, 30d, 90d, 180d), coordination detection, per-wallet profiles, and deep PnL analytics for 1,069 tracked KOL wallets. **180 days of trade history** retained. |
-| **Deshred Sniper** | Deploy feed reconstructed from shred-level data — surfaces new pump.fun launches **~500ms before on-chain confirmation**. PRO: elite/good deployers. ULTRA: all tiers + custom watchlist. Use WebSocket/webhook for live push. |
+| **Early Sniper** | Early deploy observations and watchlists for ULTRA/BUSINESS/ENTERPRISE. Execution starts unknown; no guaranteed timing lead. Use WebSocket/webhook for live push. |
 | **Alpha Wallet Intel** | Leaderboard of 1M+ scored early-buyer wallets, full wallet profiles, linked-wallet clustering, token cap-table enrichment, and 0–100 buyer quality scores with dump-cluster wallet detection. |
 | **Token Risk Score** | Transparent 0–100 rug-risk/safety score per token with a `safe`/`caution`/`danger` band, explainable factor breakdown, and the raw inputs (authorities, liquidity, transfer fee, launch cohort, deployer bond rate, KOL signal, blacklist). PRO/ULTRA. |
 | **Bundle Cohort** | The wallets that bought a token together (one atomic tx or the same slot) and — headline first — `held_pct_of_supply` still held, plus `held_ratio`, `fully_exited`, and buy volume. Every tier gets the summary; PRO adds top-10 wallet flags; ULTRA adds KOL identity, win rate, bot confidence, and per-wallet balances. |
@@ -145,7 +147,7 @@ const client = new MadeOnSol({ apiKey: "msk_your_api_key_here" });
 const { trades } = await client.kol.feed({ limit: 10, action: "buy" });
 console.log(trades[0].kol_name, "bought", trades[0].token_symbol);
 
-// Deshred sniper — ~500ms before on-chain confirmation (PRO/ULTRA)
+// Early sniper — execution initially unknown (ULTRA/BUSINESS/ENTERPRISE)
 const { deploys } = await client.sniper.recent({ limit: 20, min_bond_rate: 0.5 });
 console.log(deploys[0].token_name, "deployed by", deploys[0].deployer_tier, "tier deployer");
 
@@ -165,7 +167,7 @@ const { tools } = await client.tools.search({ q: "trading", limit: 10 });
 ## Use cases
 
 - **Copy-trading bot** — stream KOL buys via `client.kol.feed()` and mirror trades
-- **Deshred sniper** — `client.sniper.recent()` or subscribe to `sniper:deploys` WebSocket for ~500ms pre-confirm deploy signals
+- **Early sniper** — `client.sniper.recent()` or subscribe to `sniper:deploys` WebSocket for early observations with separate execution evidence
 - **DEX trade sniping** — subscribe to the all-DEX stream filtered by token, wallet, or deployer tier
 - **Graduation sniper / position manager** — subscribe `token:graduations` for every pump.fun bond in real time, or hold a mint-scoped firehose sub and get the bond in-band with your position's trade flow
 - **Coordination detector** — flag tokens with `client.kol.coordination({ min_kols: 3, min_score: 70 })`
@@ -333,12 +335,12 @@ WebSocket: subscribe to channel `price_alert:events` — user-scoped. Webhook: p
 
 ---
 
-#### `client.sniper.*` — Deshred Sniper Alerts *(new in 2.9)*
+#### `client.sniper.*` — Early Sniper Alerts *(new in 2.9)*
 
-**The fastest path to a new pump.fun launch.** Deploys are reconstructed from shred-level (**deshred**) data and surface in the feed **~500ms before the chain confirms them** — a measured head start versus any confirmed-stream feed. **PRO** sees elite + good deployers; **ULTRA** sees every tier and can keep a custom deployer watchlist.
+Early deploy observations require **ULTRA/BUSINESS/ENTERPRISE**. With ShredPrism activated, stream-token discovery includes `early_ws_url` and `early_stream` for `early:deploys`. Execution starts unknown; use separate execution evidence and deduplicate by `event_id`. No timing lead or settlement rate is guaranteed. REST, legacy sniper WebSocket/webhook delivery and watchlists use the same tier gate.
 
 ```ts
-// Newest-first deshred deploy feed (PRO: elite/good · ULTRA: all tiers)
+// Newest-first early deploy feed (ULTRA/BUSINESS/ENTERPRISE)
 const { deploys } = await client.sniper.recent({ limit: 50, min_bond_rate: 0.5 });
 
 // Audit one deployer's recent launches (ULTRA)
@@ -351,7 +353,7 @@ const { deploys: tracked } = await client.sniper.recent({ watchlist: true });
 await client.sniper.removeFromWatchlist("7dEx...4pQ8");
 ```
 
-Detection is pre-execution, so payloads carry no MC/logs/balances — `confirmed_on_chain` is `"deshred"`. For **live** push (not polling), use the `sniper:deploy` webhook event or the `sniper:deploys` WebSocket channel. ~1–3% of detected deploys may abandon before settlement.
+An observation is not proof of execution. `confirmed_on_chain` stays null until separate evidence is available. `transaction_config` carries encoded requests, with absent resource fields null and fees as decimal strings. Legacy push uses `sniper:deploy` / `sniper:deploys`; direct early delivery uses the separately advertised early WebSocket endpoint.
 
 **v2.20** — each deploy also carries a `footprint` block (`SniperFootprint | null`): the slot-window snipe rollup for slots [-1..+3] around the deploy — `buys`, `buyers`, `sol`, `supply_pct`, `sniper_wallet_buys`, `data_available`, `as_of`. `null` until the ~10-min settle window has passed (or when the mint is outside the pump.fun-pipeline write-gate) — absent, not zero.
 

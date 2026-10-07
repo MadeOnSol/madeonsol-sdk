@@ -118,6 +118,17 @@ export const pumpTokens: DeployerProfileResponse["pump_tokens"] = [
 
 export const sniper: Pick<SniperDeploy, "attribution_status" | "attribution_checked_at"> = { attribution_status: "corrected", attribution_checked_at: null };
 
+export const earlySniper: Pick<SniperDeploy, "event_id" | "source" | "outer_instruction_index" | "observation_stage" | "execution_status" | "transaction_version" | "transaction_config" | "fee_payer"> = {
+  event_id: "solana:S:1:create", source: "shredprism", outer_instruction_index: 1,
+  observation_stage: "observed", execution_status: "unknown", transaction_version: 1,
+  transaction_config: { config_mask: 1, priority_fee_lamports: "18446744073709551615", compute_unit_limit: null, loaded_accounts_data_size_limit: null, heap_size: null }, fee_payer: null,
+};
+export const legacyEarly: Pick<SniperDeploy, "transaction_version" | "transaction_config"> = { transaction_version: "legacy", transaction_config: null };
+export const earlyDiscovery: Pick<StreamToken, "early_ws_url" | "early_stream"> = {
+  early_ws_url: "wss://madeonsol.com/ws/v1/early",
+  early_stream: { channels: ["early:deploys"], subscribe_example: { type: "subscribe", channels: ["early:deploys"] }, execution_status: "unknown", note: "Observed intent; execution unknown." },
+};
+
 export const streamToken = {
   token: "t", expires_at: null, ws_url: "wss://x", usage: "u",
   subscribe_example: { type: "subscribe", channels: ["kol:trades"] },

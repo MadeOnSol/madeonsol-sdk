@@ -23,6 +23,27 @@ afterEach(() => { globalThis.fetch = realFetch; });
 
 const client = () => new MadeOnSol({ apiKey: "msk_test" });
 
+test("early sniper responses retain action identity, nulls and decimal fees on both routes", async () => {
+  const deploy = { event_id: "solana:S:1:create", observation_stage: "observed", execution_status: "unknown",
+    transaction_version: 1, fee_payer: null, transaction_config: { config_mask: 1, priority_fee_lamports: "18446744073709551615", compute_unit_limit: null, loaded_accounts_data_size_limit: null, heap_size: null } };
+  nextBody = { deploys: [deploy], count: 1, data_age_seconds: null };
+  assert.deepEqual(await client().sniper.recent(), nextBody);
+  assert.equal(calls.at(-1).url.pathname, "/api/v1/sniper/recent");
+  nextBody = { deployer: "D", deploys: [deploy], count: 1 };
+  assert.deepEqual(await client().sniper.byDeployer("D"), nextBody);
+  assert.equal(calls.at(-1).url.pathname, "/api/v1/sniper/by-deployer/D");
+});
+
+test("stream discovery preserves activated early-stream metadata and its absence", async () => {
+  nextBody = { token: "T", ws_url: "wss://old", early_ws_url: "wss://early", early_stream: {
+    channels: ["early:deploys"], subscribe_example: { type: "subscribe", channels: ["early:deploys"] }, execution_status: "unknown", note: "Observed intent" } };
+  assert.deepEqual(await client().stream.getToken(), nextBody);
+  assert.equal(calls.at(-1).method, "POST");
+  assert.equal(calls.at(-1).url.pathname, "/api/v1/stream/token");
+  nextBody = { token: "T", ws_url: "wss://old" };
+  assert.equal((await client().stream.getToken()).early_stream, undefined);
+});
+
 test("kol.wallets → GET /kol/wallets with filters", async () => {
   nextBody = {
     wallets: [{ wallet_address: "W1", name: "a", twitter_url: null, avatar_url: null, strategy_tag: null, twitter_followers: null, follow_count: 0, is_active: true, tracked_since: null }],
