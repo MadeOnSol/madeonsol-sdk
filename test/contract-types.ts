@@ -37,6 +37,18 @@ import type {
   WalletPositionsResponse,
   WalletTrackerTradesResponse,
   AlphaBuyerQualityResponse,
+  AlphaCapTableResponse,
+  KolTokenTradesResponse,
+  TokenBundleResponse,
+  TokenBundlesResponse,
+  TokenBundleShareResponse,
+  TokenBundleClusterEvent,
+  TokenBundleExitEvent,
+  TokenBundlesFilters,
+  TokenDepthUnsupportedPool,
+  TokenHoldersResponse,
+  TokenTopTradersResponse,
+  DeployerActivityEvent,
 } from "../src/index";
 
 // GET /kol/{wallet}?include=pnl_by_token
@@ -293,3 +305,62 @@ export const sablierLockHolder: Pick<TokenLock, "program" | "recipient" | "holde
 export const smithiiWithdrawals: Pick<TokenLock, "program" | "withdrawn_raw" | "withdrawn" | "withdrawn_tracked" | "claimable_raw" | "claimable"> = {
   program: "smithii_vesting", withdrawn_raw: null, withdrawn: null, withdrawn_tracked: false, claimable_raw: null, claimable: null,
 };
+
+// 2026-10-15 terminal gap batch (server main 753b99a0): new routes + opt-in fields.
+const heldNow = {
+  source: "solana_rpc_getTokenAccountsByOwner", checked_at: "t", wallets: 3, verified_wallets: 2, holding_wallets: 1,
+  complete: false, incomplete_reason: "rpc_error", slot_min: 1, slot_max: 2, tokens_held_raw: null, tokens_held: null,
+  held_pct_of_supply: null, supply_basis: null,
+} as const;
+const balanceNow = { amount_raw: "1000", decimals: 6, amount: "0.001", holding: true, token_accounts: 1, slot: 2 };
+export const kolTokenTrades = {
+  token_mint: "M", trades: [{ id: "u", kol_name: "k", kol_twitter: null, wallet: "W", action: "sell", sol_amount: null, token_amount: 12.5,
+    price_usd_at_trade: null, market_cap_usd_at_trade: 1000, tx_signature: null, traded_at: "t" }],
+  count: 1, kols_on_page: 1, next_cursor: null, has_more: false, note: "n",
+} satisfies KolTokenTradesResponse;
+export const tokenBundles = {
+  mint: "M", window: "24h", min_wallets: 3, launch_at: "t",
+  summary: { cluster_count: 1, launch_clusters: 1, later_clusters: 0, latest_cluster_at: "t", largest_cluster_wallets: 4, baseline: { buys_per_active_unit: 1.2 } },
+  clusters: [{ slot: 1, at: "t", minutes_after_launch: 0.5, phase: "launch", wallet_count: 4, new_wallets: 4, atomic_txs: 1, sol_volume: null, token_volume: 10,
+    wallets: ["A", "B"], held_now: heldNow, exit: { cluster_id: 9, followed_until: "t", wallets_tracked: 4, wallets_sold: 1, wallets_exited: 0,
+      bought_tokens: 10, sold_tokens: 2, sold_pct: 0.2, realized_sol: 0.1, last_sell_at: null } }, { slot: 2, at: "t", minutes_after_launch: null, phase: "unknown",
+    wallet_count: 3, new_wallets: 3, atomic_txs: 0, sol_volume: 1, token_volume: null, wallets: [], exit: null }],
+  held_now_clusters: 1, exit_tracking: "ok", exit_note: "n", note: "n",
+} satisfies TokenBundlesResponse;
+export const tokenBundleShare = {
+  mint: "M", window: "24h", min_wallets: 3, bundled_pct_of_supply_now: null, scope: "launch_and_clusters", clusters_status: "timeout",
+  wallets: { total: 3, launch_cohort_wallets: 2, cluster_wallets: 2, overlap: 1, clusters_counted: 1, verified: 2, holding: 1, max: 60 },
+  held_now: heldNow, as_of: "t",
+} satisfies TokenBundleShareResponse;
+export const bundleHeld: Pick<TokenBundleResponse, "held_now"> & { w: TokenBundleResponse["wallets"][number]["balance_now"] } = { held_now: heldNow, w: null };
+export const capTableVerified: Pick<AlphaCapTableResponse, "scout_scores_status" | "scout_scores_note" | "onchain_balance_verification"> & { b: Pick<AlphaCapTableResponse["buyers"][number], "balance_now" | "exited_without_sell" | "holding_status"> } = {
+  scout_scores_status: "unavailable", scout_scores_note: "n",
+  onchain_balance_verification: { source: "s", checked_at: "t", slot_min: 1, slot_max: 2, verified_wallets: 20, complete: true, verified_still_holding: 5, verified_exited: 15, exited_without_sell: 2, note: "n" },
+  b: { balance_now: balanceNow, exited_without_sell: true, holding_status: "verified_zero" },
+};
+export const buyerQualityHeld: Pick<AlphaBuyerQualityResponse, "dump_cluster_held_now"> = {
+  dump_cluster_held_now: { cohort_size: 20, members: 2, held_now: heldNow, wallets: [{ wallet: "W", balance_now: null }], note: "n" },
+};
+export const holdersFlags: Pick<TokenHoldersResponse, "wallet_flags_meta"> & { f: TokenHoldersResponse["holders"][number]["wallet_flags"] } = {
+  wallet_flags_meta: { status: "partial", rule_version: "v1" },
+  f: { is_sniper: true, is_bundler: false, is_dumper: false, is_kol: false, is_alpha_tracked: false, is_bot_high_confidence: false, label_coverage: { dumper: { evaluated: false, reason: "r" } } },
+};
+export const topTradersFifo: Pick<TokenTopTradersResponse, "cost_method" | "cost_method_note"> & { t: Pick<TokenTopTradersResponse["traders"][number], "unmatched_sell_tokens" | "cost_basis_complete" | "unrealized_pnl_sol"> } = {
+  cost_method: "fifo", cost_method_note: "n", t: { unmatched_sell_tokens: 0, cost_basis_complete: true, unrealized_pnl_sol: null },
+};
+export const depthUnsupported = { pool_address: "P", dex: "meteora_dlmm", reason: "dlmm_insufficient_liquidity_in_loaded_bins", fillable_up_to_sol: 0 } as Pick<TokenDepthUnsupportedPool, "reason" | "fillable_up_to_sol">;
+export const activityActor: Pick<DeployerActivityEvent, "actor_wallet" | "actor_role" | "token_amount_raw" | "counterparty_class"> = {
+  actor_wallet: "W", actor_role: "deployer", token_amount_raw: "18446744073709551615", counterparty_class: null,
+};
+export const launches24h: DeployerTokensResponse["launches_24h"] = { window_start: "t", window_end: "t", count: null, status: "over_budget", completeness: "indexed_observations_only" };
+export const sniperFinalized: SniperDeploy["finalized_at"] = null;
+export const bundleClusterEvt = {
+  id: 1, chain: "solana", mint: "M", slot: 1, at: "t", minutes_after_launch: 30, phase: "later", launch_at: null, wallet_count: 5, new_wallets: 3,
+  atomic_txs: 0, sol_volume: 2, token_volume: null, wallets: ["A"], detected_at: "t",
+} satisfies TokenBundleClusterEvent;
+export const bundleExitEvt = {
+  id: 2, chain: "solana", mint: "M", slot: 1, at: "t", minutes_after_launch: null, phase: "unknown", launch_at: null, wallet_count: 5, new_wallets: 3,
+  atomic_txs: 1, detected_at: "t", cluster_id: 1, cluster_detected_at: null, threshold_pct: 50, wallets_tracked: 5, wallets_sold: 3, wallets_exited: 2,
+  bought_tokens: 100, sold_tokens: 50, sold_pct: 0.5, realized_sol: 1.2, last_sell_at: "t", recent_sells: [{ wallet: "A", tx_signature: "S", tokens: null, sol: 0.4, at: "t" }],
+} satisfies TokenBundleExitEvent;
+export const bundlesFilters: TokenBundlesFilters = { mints: ["M"], min_wallets: 3, phases: ["later"], atomic_only: true, bundle_events: ["token:bundle_exit"] };

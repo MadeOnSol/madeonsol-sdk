@@ -2,8 +2,8 @@
   "schema": 1,
   "source": "MadeOnSol/madeonsol src/lib/openapi-spec.ts (scripts/generate-sdk-contract.mjs)",
   "api_version": "1.20.0",
-  "contract_hash": "31b0a30faf8414331300965e8759c2873b78bdfd405846444efbdc3c5390e4e1",
-  "operation_count": 198,
+  "contract_hash": "1bba8efe27bc5f3c4f506d327c9b59015d760d7b2d9017d2de9c59981ef01249",
+  "operation_count": 206,
   "operations": [
     {
       "id": "GET /alpha/leaderboard",
@@ -695,11 +695,15 @@
         ],
         "items": {
           "events": [
+            "actor_role",
+            "actor_wallet",
             "aggregate",
             "amount_raw",
             "asset",
             "at",
             "bonded_at",
+            "counterparty",
+            "counterparty_class",
             "counterparty_count",
             "decimals",
             "dev_buy_sol",
@@ -708,6 +712,7 @@
             "direction",
             "external_fee_payer",
             "fee_payer_is_creator",
+            "feed",
             "first_at",
             "first_tx",
             "from",
@@ -728,13 +733,16 @@
             "sample_tx_ids",
             "sol",
             "source",
+            "supply_pct",
             "symbol",
             "time_basis",
             "to",
+            "token_amount_raw",
             "tokens",
             "transfer_count",
             "tx",
-            "type"
+            "type",
+            "venue"
           ]
         }
       }
@@ -872,6 +880,7 @@
           "wallet"
         ],
         "query": [
+          "include_launches_24h",
           "limit",
           "offset",
           "only_bonded"
@@ -883,6 +892,7 @@
           "coverage",
           "has_more",
           "is_deployer",
+          "launches_24h",
           "limit",
           "offset",
           "tokens",
@@ -1922,6 +1932,53 @@
       }
     },
     {
+      "id": "GET /kol/tokens/{mint}/trades",
+      "method": "GET",
+      "path": "/kol/tokens/{mint}/trades",
+      "chain": "solana",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "mint"
+        ],
+        "query": [
+          "action",
+          "cursor",
+          "kol",
+          "limit",
+          "since"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "count",
+          "has_more",
+          "kols_on_page",
+          "next_cursor",
+          "note",
+          "token_mint",
+          "trades"
+        ],
+        "items": {
+          "trades": [
+            "action",
+            "id",
+            "kol_name",
+            "kol_twitter",
+            "market_cap_usd_at_trade",
+            "price_usd_at_trade",
+            "sol_amount",
+            "token_amount",
+            "traded_at",
+            "tx_signature",
+            "wallet"
+          ]
+        }
+      }
+    },
+    {
       "id": "GET /kol/wallets",
       "method": "GET",
       "path": "/kol/wallets",
@@ -2896,6 +2953,60 @@
       }
     },
     {
+      "id": "GET /rhc/deployer-hunter/{address}/activity",
+      "method": "GET",
+      "path": "/rhc/deployer-hunter/{address}/activity",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": [
+          "cursor",
+          "limit",
+          "since",
+          "types"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "address",
+          "chain",
+          "count",
+          "coverage",
+          "events",
+          "has_more",
+          "next_cursor",
+          "note",
+          "summary",
+          "window"
+        ],
+        "items": {
+          "events": [
+            "at",
+            "attribution",
+            "block_number",
+            "dex",
+            "eth_amount",
+            "event_id",
+            "id",
+            "launchpad",
+            "log_index",
+            "price_usd",
+            "token_address",
+            "token_amount_raw",
+            "token_name",
+            "token_symbol",
+            "tx_hash",
+            "type"
+          ]
+        }
+      }
+    },
+    {
       "id": "GET /rhc/deployer-hunter/{address}/history",
       "method": "GET",
       "path": "/rhc/deployer-hunter/{address}/history",
@@ -2953,6 +3064,7 @@
           "address"
         ],
         "query": [
+          "include_launches_24h",
           "limit",
           "offset",
           "sort"
@@ -2966,6 +3078,7 @@
           "deployer",
           "has_more",
           "is_deployer",
+          "launches_24h",
           "limit",
           "offset",
           "sort",
@@ -3572,7 +3685,9 @@
         "path": [],
         "query": [
           "limit",
-          "period"
+          "min_closed",
+          "period",
+          "sort"
         ]
       },
       "body": [],
@@ -3581,20 +3696,78 @@
           "chain",
           "count",
           "leaderboard",
-          "period"
+          "min_closed",
+          "period",
+          "scores_meta",
+          "sort"
         ],
         "items": {
           "leaderboard": [
+            "auto_strategy_tag",
             "buy_eth",
             "buys",
+            "closed_positions_30d",
+            "closed_positions_7d",
+            "computed_at",
+            "data_fingerprint",
+            "evm_address",
             "kol_name",
             "kol_twitter",
             "last_trade_at",
+            "median_hold_minutes_30d",
             "net_eth",
+            "pnl_30d_eth",
+            "pnl_7d_eth",
             "sell_eth",
             "sells",
+            "status",
             "tokens_traded",
-            "trades"
+            "trades",
+            "winrate_30d",
+            "winrate_7d"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/kol/scouts/leaderboard",
+      "method": "GET",
+      "path": "/rhc/kol/scouts/leaderboard",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [],
+        "query": [
+          "limit",
+          "min_first_touches",
+          "scout_tier",
+          "sort"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "as_of",
+          "chain",
+          "count",
+          "method",
+          "min_first_touches",
+          "scouts"
+        ],
+        "items": {
+          "scouts": [
+            "as_of",
+            "avatar_url",
+            "avg_followers_4h",
+            "evm_addresses",
+            "first_touches_30d",
+            "kol_id",
+            "name",
+            "scout_tier",
+            "swarm_3plus_pct",
+            "swarm_5plus_pct",
+            "twitter_url"
           ]
         }
       }
@@ -3650,7 +3823,9 @@
         "path": [
           "wallet"
         ],
-        "query": []
+        "query": [
+          "include_performance"
+        ]
       },
       "body": [],
       "response": {
@@ -3659,6 +3834,7 @@
           "evm_address",
           "kol_name",
           "kol_twitter",
+          "performance",
           "stats",
           "trades"
         ],
@@ -3949,6 +4125,8 @@
             "is_graduated",
             "last_trade_time",
             "launchpad",
+            "liquidity_source",
+            "liquidity_status",
             "liquidity_usd",
             "market_cap_usd",
             "name",
@@ -3994,6 +4172,8 @@
           "launchpad",
           "liquidity_basis",
           "liquidity_note",
+          "liquidity_source",
+          "liquidity_status",
           "liquidity_usd",
           "market_cap_usd",
           "name",
@@ -4426,6 +4606,8 @@
           "launchpad",
           "liquidity_basis",
           "liquidity_note",
+          "liquidity_source",
+          "liquidity_status",
           "liquidity_usd",
           "market_cap_usd",
           "name",
@@ -4459,18 +4641,22 @@
         "path": [
           "address"
         ],
-        "query": []
+        "query": [
+          "include_balances"
+        ]
       },
       "body": [],
       "response": {
         "top": [
           "bundle",
           "chain",
+          "held_now",
           "token_address",
           "wallets"
         ],
         "items": {
           "wallets": [
+            "balance_now",
             "has_sold",
             "held_ratio",
             "is_kol",
@@ -4479,6 +4665,91 @@
             "tokens_held",
             "wallet",
             "win_rate"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /rhc/tokens/{address}/bundle-share",
+      "method": "GET",
+      "path": "/rhc/tokens/{address}/bundle-share",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": [
+          "min_wallets",
+          "window"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "as_of",
+          "bundled_pct_of_supply_now",
+          "chain",
+          "clusters_status",
+          "held_now",
+          "min_wallets",
+          "note",
+          "scope",
+          "token_address",
+          "wallets",
+          "window"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/tokens/{address}/bundles",
+      "method": "GET",
+      "path": "/rhc/tokens/{address}/bundles",
+      "chain": "rhc",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": [
+          "include_balances",
+          "limit",
+          "min_wallets",
+          "window"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "chain",
+          "clusters",
+          "exit_note",
+          "exit_tracking",
+          "held_now_clusters",
+          "launch_at",
+          "min_wallets",
+          "note",
+          "summary",
+          "token_address",
+          "window"
+        ],
+        "items": {
+          "clusters": [
+            "at",
+            "block_number",
+            "eth_volume",
+            "exit",
+            "held_now",
+            "minutes_after_launch",
+            "new_wallets",
+            "phase",
+            "same_tx_groups",
+            "token_volume_raw",
+            "wallet_count",
+            "wallets"
           ]
         }
       }
@@ -4494,7 +4765,9 @@
         "path": [
           "address"
         ],
-        "query": []
+        "query": [
+          "include_balances"
+        ]
       },
       "body": [],
       "response": {
@@ -4503,6 +4776,7 @@
           "cohort_selection",
           "coverage",
           "current_mc_usd",
+          "dump_cluster_held_now",
           "note",
           "quality",
           "token_address"
@@ -4578,7 +4852,9 @@
           "address"
         ],
         "query": [
-          "limit"
+          "include_scout_scores",
+          "limit",
+          "verify_current_balances"
         ]
       },
       "body": [],
@@ -4588,8 +4864,13 @@
           "computed_at",
           "count",
           "early_buyers",
+          "holder_recon_block",
+          "holder_recon_checked_at",
           "holdings_verified",
           "note",
+          "onchain_balance_verification",
+          "scout_scores_note",
+          "scout_scores_status",
           "summary",
           "token_address"
         ],
@@ -4600,9 +4881,13 @@
             "bought_eth",
             "first_buy_at",
             "first_buy_block",
+            "holding_reason",
+            "holding_status",
+            "is_kol",
             "position",
             "rank",
             "realized_eth",
+            "scout_score",
             "sold_eth",
             "still_holding",
             "trades",
@@ -4662,6 +4947,7 @@
         ],
         "query": [
           "after",
+          "include_wallet_flags",
           "limit",
           "offset"
         ]
@@ -4681,10 +4967,12 @@
           "next_after",
           "offset",
           "reconciliation",
+          "share_basis",
           "source",
           "token_address",
           "unverified_reason",
-          "verified"
+          "verified",
+          "wallet_flags_meta"
         ],
         "items": {
           "holders": [
@@ -4694,7 +4982,10 @@
             "is_deployer",
             "is_pool",
             "last_block",
-            "share"
+            "share",
+            "share_of_circulating",
+            "share_of_supply",
+            "wallet_flags"
           ]
         }
       }
@@ -4722,6 +5013,59 @@
           "token_address"
         ],
         "items": {}
+      }
+    },
+    {
+      "id": "GET /rhc/tokens/{address}/kol-trades",
+      "method": "GET",
+      "path": "/rhc/tokens/{address}/kol-trades",
+      "chain": "rhc",
+      "tier": "FREE",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "address"
+        ],
+        "query": [
+          "action",
+          "cursor",
+          "include_balances",
+          "kol",
+          "limit",
+          "since"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "balances",
+          "chain",
+          "count",
+          "has_more",
+          "kols_on_page",
+          "next_cursor",
+          "note",
+          "token_address",
+          "trades"
+        ],
+        "items": {
+          "trades": [
+            "action",
+            "block_number",
+            "dex",
+            "eth_amount",
+            "evm_address",
+            "id",
+            "kol_name",
+            "kol_twitter",
+            "log_index",
+            "market_cap_usd_at_trade",
+            "price_usd_at_trade",
+            "token_amount",
+            "traded_at",
+            "tx_hash"
+          ]
+        }
       }
     },
     {
@@ -4908,7 +5252,10 @@
         "top": [
           "attribution",
           "chain",
+          "cost_method",
           "count",
+          "fifo_note",
+          "fifo_status",
           "has_more",
           "limit",
           "metric",
@@ -4922,6 +5269,7 @@
             "buy_eth",
             "dump_cohorts",
             "early_buyer_rank",
+            "fifo",
             "is_known_kol",
             "kol_name",
             "last_trade_at",
@@ -5562,6 +5910,7 @@
             "event_id",
             "execution_status",
             "fee_payer",
+            "finalized_at",
             "footprint",
             "mint",
             "name",
@@ -5601,6 +5950,7 @@
           "coverage",
           "data_age_seconds",
           "deploys",
+          "history",
           "watchlist_empty"
         ],
         "items": {
@@ -5622,6 +5972,7 @@
             "event_id",
             "execution_status",
             "fee_payer",
+            "finalized_at",
             "footprint",
             "mint",
             "name",
@@ -6477,19 +6828,23 @@
         "path": [
           "mint"
         ],
-        "query": []
+        "query": [
+          "include_balances"
+        ]
       },
       "body": [],
       "response": {
         "top": [
           "bundle",
           "coverage",
+          "held_now",
           "mint",
           "wallets"
         ],
         "items": {
           "wallets": [
             "atomic",
+            "balance_now",
             "bot_confidence",
             "has_sold",
             "held_ratio",
@@ -6499,6 +6854,89 @@
             "tokens_held",
             "wallet",
             "win_rate"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GET /tokens/{mint}/bundle-share",
+      "method": "GET",
+      "path": "/tokens/{mint}/bundle-share",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "mint"
+        ],
+        "query": [
+          "min_wallets",
+          "window"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "as_of",
+          "bundled_pct_of_supply_now",
+          "clusters_status",
+          "held_now",
+          "min_wallets",
+          "mint",
+          "note",
+          "scope",
+          "wallets",
+          "window"
+        ],
+        "items": {}
+      }
+    },
+    {
+      "id": "GET /tokens/{mint}/bundles",
+      "method": "GET",
+      "path": "/tokens/{mint}/bundles",
+      "chain": "solana",
+      "tier": "PRO",
+      "alias_of": null,
+      "params": {
+        "path": [
+          "mint"
+        ],
+        "query": [
+          "include_balances",
+          "limit",
+          "min_wallets",
+          "window"
+        ]
+      },
+      "body": [],
+      "response": {
+        "top": [
+          "clusters",
+          "exit_note",
+          "exit_tracking",
+          "held_now_clusters",
+          "launch_at",
+          "min_wallets",
+          "mint",
+          "note",
+          "summary",
+          "window"
+        ],
+        "items": {
+          "clusters": [
+            "at",
+            "atomic_txs",
+            "exit",
+            "held_now",
+            "minutes_after_launch",
+            "new_wallets",
+            "phase",
+            "slot",
+            "sol_volume",
+            "token_volume",
+            "wallet_count",
+            "wallets"
           ]
         }
       }
@@ -6514,7 +6952,9 @@
         "path": [
           "mint"
         ],
-        "query": []
+        "query": [
+          "include_balances"
+        ]
       },
       "body": [],
       "response": {
@@ -6523,6 +6963,7 @@
           "cached_at",
           "confidence",
           "coverage",
+          "dump_cluster_held_now",
           "mint",
           "note",
           "score",
@@ -6546,6 +6987,7 @@
         "query": [
           "from",
           "limit",
+          "partial",
           "tf",
           "to"
         ]
@@ -6602,7 +7044,9 @@
           "mint"
         ],
         "query": [
-          "limit"
+          "include_scout_scores",
+          "limit",
+          "verify_current_balances"
         ]
       },
       "body": [],
@@ -6611,23 +7055,30 @@
           "buyers",
           "coverage",
           "mint",
+          "onchain_balance_verification",
           "ranks_completeness",
+          "scout_scores_note",
+          "scout_scores_status",
           "summary"
         ],
         "items": {
           "buyers": [
+            "balance_now",
             "bot_confidence",
+            "exited_without_sell",
             "first_buy_at",
             "first_buy_sol",
             "first_sell_at",
             "historical_pnl_sol",
             "historical_tokens",
             "historical_win_rate",
+            "holding_status",
             "is_bundle",
             "is_kol",
             "kol_name",
             "rank",
             "realized_pnl_sol",
+            "scout_score",
             "still_holding",
             "total_sol_bought",
             "total_sol_sold",
@@ -6689,6 +7140,7 @@
           ],
           "unsupported_pools": [
             "dex",
+            "fillable_up_to_sol",
             "is_active",
             "liquidity_usd",
             "pool_address",
@@ -6785,7 +7237,9 @@
         "path": [
           "mint"
         ],
-        "query": []
+        "query": [
+          "include_wallet_flags"
+        ]
       },
       "body": [],
       "response": {
@@ -6799,7 +7253,8 @@
           "holders",
           "mint",
           "slot",
-          "source"
+          "source",
+          "wallet_flags_meta"
         ],
         "items": {
           "excluded": [
@@ -6823,7 +7278,8 @@
             "pct_of_circulating",
             "pct_of_supply",
             "rank",
-            "token_accounts"
+            "token_accounts",
+            "wallet_flags"
           ]
         }
       }
@@ -7059,6 +7515,8 @@
       "body": [],
       "response": {
         "top": [
+          "cost_method",
+          "cost_method_note",
           "coverage",
           "mint",
           "sort",
@@ -7071,6 +7529,7 @@
             "bot_confidence",
             "bought_sol",
             "buys",
+            "cost_basis_complete",
             "first_trade_at",
             "held_value_sol",
             "historical_pnl_sol",
@@ -7088,6 +7547,7 @@
             "still_holding",
             "total_pnl_sol",
             "trades",
+            "unmatched_sell_tokens",
             "unrealized_pnl_sol",
             "wallet"
           ]
@@ -7128,6 +7588,7 @@
         "items": {
           "trades": [
             "action",
+            "amounts",
             "block_time",
             "early_buyer_rank",
             "market_price_sol",
@@ -7805,6 +8266,7 @@
         "items": {
           "trades": [
             "action",
+            "amounts",
             "block_time",
             "market_price_sol",
             "market_price_usd",

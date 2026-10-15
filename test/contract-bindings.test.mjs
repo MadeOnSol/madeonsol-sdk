@@ -139,3 +139,79 @@ test("deployer.deployerActivity → GET /deployer-hunter/{wallet}/activity with 
   assert.equal(r.is_deployer, true);
 });
 
+
+test("kol.tokenTrades → GET /kol/tokens/{mint}/trades with limit/action/kol/since/cursor", async () => {
+  nextBody = { token_mint: "M", trades: [{ id: "u", kol_name: null, kol_twitter: null, wallet: "W", action: "buy", sol_amount: 1.5, token_amount: null,
+    price_usd_at_trade: null, market_cap_usd_at_trade: null, tx_signature: "S", traded_at: "2026-10-15T00:00:00Z" }],
+    count: 1, kols_on_page: 1, next_cursor: "c2", has_more: true };
+  const r = await client().kol.tokenTrades("M", { limit: 50, action: "sell", kol: "W", since: "2026-10-01T00:00:00Z", cursor: "c1" });
+  const c = calls[0];
+  assert.equal(c.method, "GET");
+  assert.equal(c.url.pathname, "/api/v1/kol/tokens/M/trades");
+  assert.equal(c.url.searchParams.get("limit"), "50");
+  assert.equal(c.url.searchParams.get("action"), "sell");
+  assert.equal(c.url.searchParams.get("kol"), "W");
+  assert.equal(c.url.searchParams.get("since"), "2026-10-01T00:00:00Z");
+  assert.equal(c.url.searchParams.get("cursor"), "c1");
+  assert.deepEqual(r, nextBody);
+});
+
+test("alpha.bundles → GET /tokens/{mint}/bundles with window/min_wallets/limit/include_balances", async () => {
+  nextBody = { mint: "M", window: "6h", min_wallets: 4, launch_at: null,
+    summary: { cluster_count: 0, launch_clusters: 0, later_clusters: 0, latest_cluster_at: null, largest_cluster_wallets: 0, baseline: null },
+    clusters: [], exit_tracking: "ok" };
+  const r = await client().alpha.bundles("M", { window: "6h", min_wallets: 4, limit: 10, include_balances: true });
+  const c = calls[0];
+  assert.equal(c.method, "GET");
+  assert.equal(c.url.pathname, "/api/v1/tokens/M/bundles");
+  assert.equal(c.url.searchParams.get("window"), "6h");
+  assert.equal(c.url.searchParams.get("min_wallets"), "4");
+  assert.equal(c.url.searchParams.get("limit"), "10");
+  assert.equal(c.url.searchParams.get("include_balances"), "true");
+  assert.deepEqual(r, nextBody);
+  await client().alpha.bundles("M");
+  assert.equal(calls[1].url.search, "");
+});
+
+test("alpha.bundleShare → GET /tokens/{mint}/bundle-share with window/min_wallets; null share passes through", async () => {
+  nextBody = { mint: "M", window: "1h", min_wallets: 3, bundled_pct_of_supply_now: null, scope: "launch_cohort_only", clusters_status: "unavailable",
+    wallets: { total: 2, launch_cohort_wallets: 2, cluster_wallets: 0, overlap: 0, clusters_counted: 0, verified: 1, holding: 1, max: 60 },
+    held_now: { complete: false, incomplete_reason: "rpc_error" }, as_of: "2026-10-15T00:00:00Z" };
+  const r = await client().alpha.bundleShare("M", { window: "1h", min_wallets: 3 });
+  const c = calls[0];
+  assert.equal(c.method, "GET");
+  assert.equal(c.url.pathname, "/api/v1/tokens/M/bundle-share");
+  assert.equal(c.url.searchParams.get("window"), "1h");
+  assert.equal(c.url.searchParams.get("min_wallets"), "3");
+  assert.equal(r.bundled_pct_of_supply_now, null);
+  assert.deepEqual(r, nextBody);
+});
+
+test("opt-in balance / flag params reach the query string", async () => {
+  const c = client();
+  await c.alpha.bundle("M", { include_balances: true });
+  await c.alpha.buyerQuality("M", { include_balances: true });
+  await c.alpha.capTable("M", { limit: 20, verify_current_balances: true, include_scout_scores: true });
+  await c.alpha.holders("M", { include_wallet_flags: true });
+  await c.deployer.tokens("D", { include_launches_24h: true, only_bonded: true });
+  await c.token.topTraders("M", { offset: 25 });
+  assert.equal(calls[0].url.pathname, "/api/v1/tokens/M/bundle");
+  assert.equal(calls[0].url.searchParams.get("include_balances"), "true");
+  assert.equal(calls[1].url.pathname, "/api/v1/tokens/M/buyer-quality");
+  assert.equal(calls[1].url.searchParams.get("include_balances"), "true");
+  assert.equal(calls[2].url.pathname, "/api/v1/tokens/M/cap-table");
+  assert.equal(calls[2].url.searchParams.get("verify_current_balances"), "true");
+  assert.equal(calls[2].url.searchParams.get("include_scout_scores"), "true");
+  assert.equal(calls[2].url.searchParams.get("limit"), "20");
+  assert.equal(calls[3].url.pathname, "/api/v1/tokens/M/holders");
+  assert.equal(calls[3].url.searchParams.get("include_wallet_flags"), "true");
+  assert.equal(calls[4].url.pathname, "/api/v1/deployer-hunter/D/tokens");
+  assert.equal(calls[4].url.searchParams.get("include_launches_24h"), "true");
+  assert.equal(calls[4].url.searchParams.get("only_bonded"), "true");
+  assert.equal(calls[5].url.searchParams.get("offset"), "25");
+  // no opt-in → no query string (unchanged default requests)
+  await c.alpha.bundle("M");
+  await c.alpha.holders("M");
+  assert.equal(calls[6].url.search, "");
+  assert.equal(calls[7].url.search, "");
+});

@@ -40,7 +40,9 @@ export type StreamChannel =
   | "token:candles"           // PRO+, mint-scoped: REQUIRES filters.mints (own cap: PRO 25 / ULTRA 100 / BUSINESS 250), filters.updates adds the open minute
   | "token:risk"              // PRO+, mint-scoped: REQUIRES filters.mints — risk-INPUT changes + a risk:inputs snapshot on subscribe
   // PRO+, wallet-scoped: REQUIRES filters.wallets — deployer tier + KOL score-state changes
-  | "wallet:scores";
+  | "wallet:scores"
+  // PRO+, broadcast: every NEW coordinated buy cluster on any token, launch or later (optional filters.mints, min_wallets, min_new_wallets, phases, atomic_only, bundle_events)
+  | "token:bundles";
 
 /** Every Solana channel, in the server's order. */
 export const STREAM_CHANNELS: readonly StreamChannel[] = [
@@ -60,6 +62,7 @@ export const STREAM_CHANNELS: readonly StreamChannel[] = [
   "token:candles",
   "token:risk",
   "wallet:scores",
+  "token:bundles",
 ];
 
 /** Event names delivered on those channels (subscribe to a channel, receive these). */
@@ -94,7 +97,9 @@ export type StreamEventName =
   | "risk:supply_inflated"    // on token:risk (TokenRiskSupplyInflatedEvent)
   | "risk:inputs"             // on token:risk — snapshot frame (frame.snapshot === true), current stored inputs per mint
   | "deployer:tier_changed"   // on wallet:scores (DeployerTierChangedEvent)
-  | "kol:score_state_changed"; // on wallet:scores (KolScoreStateChangedEvent)
+  | "kol:score_state_changed" // on wallet:scores (KolScoreStateChangedEvent)
+  | "token:bundle_cluster"    // on token:bundles — one new coordinated buy cluster (TokenBundleClusterEvent)
+  | "token:bundle_exit";      // on token:bundles — that cluster's wallets sold 25/50/90/100 % of their cluster buy (TokenBundleExitEvent)
 
 /** Minimal stream-token shape the client needs (token + ws_url). */
 export interface StreamTokenLike {
